@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
-project(ScapeDB)
+project(ScapeDB C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(antlr4-runtime REQUIRED)
 
 set(PARSER_DIR ${CMAKE_SOURCE_DIR}/generated)
 set(parser_src ${PARSER_DIR}/SQLBaseVisitor.cpp ${PARSER_DIR}/SQLLexer.cpp
@@ -12,3 +16,12 @@ add_custom_command(
   COMMAND java -jar ./antlr4.jar -Dlanguage=Cpp ./SQL.g4 -visitor -no-listener
           -o ./generated
   DEPENDS ${CMAKE_SOURCE_DIR}/SQL.g4)
+
+include_directories(${ANTLR4_INCLUDE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/generated)
+include_directories(${CMAKE_SOURCE_DIR}/3rd_party/argparse-2.9/include)
+
+set(scape_src ${CMAKE_SOURCE_DIR}/src/main.cpp)
+
+add_library(parser SHARED ${parser_src})
+add_executable(db ${scape_src})
