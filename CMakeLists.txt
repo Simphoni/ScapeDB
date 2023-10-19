@@ -20,8 +20,9 @@ add_custom_command(
 include_directories(${ANTLR4_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/generated)
 include_directories(${CMAKE_SOURCE_DIR}/3rd_party/argparse-2.9/include)
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
-set(scape_src ${CMAKE_SOURCE_DIR}/src/main.cpp)
+file(GLOB_RECURSE scape_src src/*.cpp)
 
 add_library(parser SHARED ${parser_src})
 add_executable(db ${scape_src})
