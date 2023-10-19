@@ -1,8 +1,14 @@
 #include <argparse/argparse.hpp>
+#include <frontend/frontend.h>
 #include <utils/config.h>
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
+
+std::string const prompt = "scapedb>";
+std::string const prompt_empty = "      ->";
+
 int main(int argc, char **argv) {
   argparse::ArgumentParser parser("ScapeDB", "0.1");
   parser.add_argument("-b", "--batch")
@@ -23,5 +29,28 @@ int main(int argc, char **argv) {
     std::exit(1);
   }
   Config::get_mut()->parse(parser);
+  auto cfg = Config::get();
+  auto frontend = ScapeFrontend::build();
+  if (cfg->preset_db != "") {
+    frontend->set_db(cfg->preset_db);
+  }
+  if (cfg->batch_mode) {
+    frontend->run_batch();
+  } else {
+    std::cout << prompt;
+    std::string stmt, loi; // line of input
+    stmt.reserve(512);
+    loi.reserve(512);
+    while (!std::getline(std::cin, loi).eof()) {
+      stmt += loi;
+      if (loi.back() == ';') {
+        frontend->run_interactive(stmt);
+        stmt = "";
+        std::cout << prompt;
+      } else {
+        std::cout << prompt_empty;
+      }
+    }
+  }
   return 0;
 }

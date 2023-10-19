@@ -24,5 +24,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE scape_src src/*.cpp)
 
-add_library(parser SHARED ${parser_src})
+add_library(sql_parser SHARED ${parser_src})
 add_executable(db ${scape_src})
+target_link_libraries(sql_parser PRIVATE antlr4_shared)
+target_link_libraries(db PRIVATE sql_parser antlr4_shared)

@@ -7,7 +7,7 @@ class Config {
 private:
   Config() = default;
   Config(const Config &) = delete;
-  static Config *instance;
+  static std::shared_ptr<Config> instance;
 
 public:
   bool batch_mode{false};
@@ -15,15 +15,15 @@ public:
   std::string preset_db{""};
   std::string preset_table{""};
 
-  static const Config *get() {
+  static std::shared_ptr<const Config> get() {
     if (instance == nullptr) {
-      instance = new Config();
+      instance = std::shared_ptr<Config>(new Config());
     }
-    return instance;
+    return std::const_pointer_cast<const Config>(instance);
   }
-  static Config *get_mut() {
+  static std::shared_ptr<Config> get_mut() {
     if (instance == nullptr) {
-      instance = new Config();
+      instance = std::shared_ptr<Config>(new Config());
     }
     return instance;
   }

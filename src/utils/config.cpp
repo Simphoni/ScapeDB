@@ -1,6 +1,6 @@
 #include <utils/config.h>
 
-Config *Config::instance = nullptr;
+std::shared_ptr<Config> Config::instance = nullptr;
 
 void Config::parse(argparse::ArgumentParser &parser) {
   batch_mode = parser.is_used("-b");
