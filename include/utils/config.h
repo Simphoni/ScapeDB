@@ -1,19 +1,32 @@
 #pragma once
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <argparse/argparse.hpp>
+#include <cassert>
 #include <memory>
 #include <string>
 
+typedef std::pair<int, int> PageLocator;
+
 class Config {
 private:
-  Config() = default;
+  Config();
   Config(const Config &) = delete;
   static std::shared_ptr<Config> instance;
 
 public:
+  static int const PAGED_MEMORY = 128 * 1024 * 1024;
+  static int const PAGE_SIZE = 1 << 13;
+  static int const POOLED_PAGES = PAGED_MEMORY / PAGE_SIZE;
+
   bool batch_mode{false};
   std::string import_command_file{""};
   std::string preset_db{""};
   std::string preset_table{""};
+  std::string db_data_root;
+  std::string db_meta_file{""};
+  std::string dbs_dir{""};
 
   static std::shared_ptr<const Config> get() {
     if (instance == nullptr) {

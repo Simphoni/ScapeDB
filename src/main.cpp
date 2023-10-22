@@ -21,6 +21,8 @@ int main(int argc, char **argv) {
       .help("specify <table: string> to operate on");
   parser.add_argument("-f", "--filepath")
       .help("specify <path: string> to the file containing import commands");
+  parser.add_argument("--data-dir")
+      .help("specify <datadir: string = \"./data\"> as root of database files");
   try {
     parser.parse_args(argc, argv);
   } catch (const std::runtime_error &e) {
