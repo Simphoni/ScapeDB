@@ -7,8 +7,6 @@
 #include <memory>
 #include <string>
 
-typedef std::pair<int, int> PageLocator;
-
 class Config {
 private:
   Config();
