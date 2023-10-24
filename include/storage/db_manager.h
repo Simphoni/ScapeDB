@@ -1,11 +1,13 @@
 #pragma once
 
-#include <memory>
+#include <string>
+#include <utils/config.h>
+#include <vector>
 
 class DatabaseManager {
 private:
-  std::string db_data_path{""};
   static std::shared_ptr<DatabaseManager> instance;
+  std::vector<std::string> dbs;
 
   DatabaseManager() {}
   DatabaseManager(const DatabaseManager &) = delete;
@@ -17,4 +19,9 @@ public:
     }
     return instance;
   }
+
+  // reads the global meta file to initializes the database
+  void global_meta_read();
+  // metadata must be written back after each db operation
+  void global_meta_write() const;
 };

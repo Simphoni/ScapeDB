@@ -1,5 +1,7 @@
+#include <cstring>
 #include <storage/file_mapping.h>
 #include <storage/paged_buffer.h>
+#include <type_traits>
 
 std::shared_ptr<PagedBuffer> PagedBuffer::instance = nullptr;
 
@@ -26,6 +28,7 @@ PagedBuffer::~PagedBuffer() {
       base->write_page(pages[i].pos, pages[i].slice);
   }
   std::free(head_ptr);
+  std::free(swap_ptr);
   head_ptr = nullptr;
 }
 
@@ -90,5 +93,92 @@ uint8_t *PagedBuffer::read_file(PageLocator pos) {
     return pages[id].slice;
   } else {
     return nullptr;
+  }
+}
+
+SequentialAccessor::SequentialAccessor(int fd) : fd(fd) {
+  pagenum = 0;
+  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, 0));
+  cur = headptr;
+  tailptr = headptr + Config::PAGE_SIZE;
+}
+
+void SequentialAccessor::reset() {
+  pagenum = 0;
+  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, 0));
+  cur = headptr;
+  tailptr = headptr + Config::PAGE_SIZE;
+}
+
+uint8_t SequentialAccessor::read_byte() {
+  check_buffer();
+  return *cur++;
+}
+
+void SequentialAccessor::write_byte(uint8_t byte) {
+  check_buffer();
+  *cur++ = byte;
+}
+
+template <typename T> T SequentialAccessor::read() {
+  static_assert(std::is_integral<T>::value, "T must be integral type");
+  check_buffer();
+  T ret = 0;
+  if (cur + sizeof(T) <= tailptr) {
+    ret = *(T *)cur;
+    cur += sizeof(T);
+  } else {
+    for (int i = 0; i < sizeof(T); i++) {
+      ret |= read_byte() << (i << 3);
+    }
+  }
+  return ret;
+}
+
+std::string SequentialAccessor::read_str() {
+  // [len: int] [char*]
+  uint32_t len = read<uint32_t>();
+  check_buffer();
+  if (cur + len <= tailptr) {
+    std::string ret = std::string((char *)cur, len);
+    cur += len;
+    return ret;
+  }
+  std::string ret = std::string((char *)cur, tailptr - cur);
+  len -= tailptr - cur;
+  cur = tailptr;
+  check_buffer();
+  ret += std::string((char *)cur, len);
+  cur += len;
+  return ret;
+}
+
+template <typename T> void SequentialAccessor::write(T val) {
+  static_assert(std::is_integral<T>::value, "T must be integral type");
+  check_buffer();
+  if (cur + sizeof(T) <= tailptr) {
+    *(T *)cur = val;
+    cur += sizeof(T);
+  } else {
+    for (int i = 0; i < sizeof(T); i++) {
+      write_byte(val & 0xff);
+      val >>= 8;
+    }
+  }
+}
+
+void SequentialAccessor::write_str(const std::string &s) {
+  write<uint32_t>(s.length());
+  check_buffer();
+  if (cur + s.length() <= tailptr) {
+    memcpy(cur, s.c_str(), s.length());
+    cur += s.length();
+  } else {
+    int len1 = tailptr - cur;
+    memcpy(cur, s.c_str(), len1);
+    cur += len1;
+    check_buffer();
+    memcpy(cur, s.c_str() + len1, s.length() - len1);
+    cur += s.length() - len1;
   }
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "storage/file_mapping.h"
+#include <cstdint>
 #include <memory>
 #include <storage/defs.h>
 #include <unordered_map>
@@ -36,6 +38,11 @@ private:
   PagedBuffer(const PagedBuffer &) = delete;
   PagedBuffer(int, int);
 
+  void list_remove(int id);
+  void list_append(int id);
+  void access(int id);
+  int get_replace();
+
 public:
   ~PagedBuffer();
   static std::shared_ptr<PagedBuffer> get() {
@@ -46,11 +53,35 @@ public:
     return instance;
   }
 
-  void list_remove(int id);
-  void list_append(int id);
-  void access(int id);
-  int get_replace();
-
   // read a specific page from a file
   uint8_t *read_file(PageLocator pos);
+};
+
+class SequentialAccessor {
+private:
+  int fd, pagenum;
+  uint8_t *headptr, *cur, *tailptr;
+
+  inline void check_buffer() {
+    assert(cur <= tailptr);
+    if (cur == tailptr) {
+      pagenum++;
+      headptr = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum));
+      cur = headptr;
+      tailptr = headptr + Config::PAGE_SIZE;
+    }
+  }
+  uint8_t read_byte();
+  void write_byte(uint8_t byte);
+
+public:
+  SequentialAccessor(int fd);
+
+  void reset();
+
+  template <typename T> T read();
+  std::string read_str();
+
+  template <typename T> void write(T val);
+  void write_str(const std::string &val);
 };

@@ -21,9 +21,11 @@ public:
     return instance;
   }
 
-  int open_file(const std::string &path);
+  bool create_file(const std::string &file) const;
+  int open_file(const std::string &file);
+  int get_fd(const std::string &file);
   // closing a file will cause all its buffered pages to be deserted
-  void close_file(const std::string &path);
+  void close_file(const std::string &file);
   bool read_page(PageLocator pos, uint8_t *ptr);
   bool write_page(PageLocator pos, uint8_t *ptr);
   bool is_open(int id);

@@ -12,10 +12,22 @@ FileMapping::~FileMapping() {
   }
 }
 
-int FileMapping::open_file(const std::string &path) {
-  std::string file = fs::path(path).lexically_normal();
+bool FileMapping::create_file(const std::string &s) const {
+  if (fs::exists(s)) {
+    return false;
+  }
+  std::ofstream f(s);
+  bool ret = f.good();
+  f.close();
+  return ret;
+}
+
+int FileMapping::open_file(const std::string &file) {
   if (!fs::is_regular_file(file)) {
     return -1;
+  }
+  if (fds.contains(file)) {
+    return fds[file];
   }
   int fd = open(file.c_str(), O_RDWR);
   if (fd == -1) {
@@ -26,15 +38,15 @@ int FileMapping::open_file(const std::string &path) {
   return fd;
 }
 
-void FileMapping::close_file(const std::string &path) {
-  std::string file = fs::path(path).lexically_normal();
-  auto it = fds.find(file);
-  if (it != fds.end()) {
-    int fd = it->second;
-    auto fit = filenames.find(fd);
-    assert(fit != filenames.end());
-    fds.erase(it);
-    filenames.erase(fit);
+int FileMapping::get_fd(const std::string &file) {
+  return fds.contains(file) ? fds[file] : -1;
+}
+
+void FileMapping::close_file(const std::string &file) {
+  if (fds.contains(file)) {
+    int fd = fds[file];
+    fds.erase(file);
+    filenames.erase(fd);
     close(fd);
   }
 }
