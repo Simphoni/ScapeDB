@@ -1,12 +1,12 @@
 #pragma once
 #include <memory>
+#include <storage/db_manager.h>
 #include <string>
 
 class ScapeFrontend {
-  // std::shared_ptr<ScapeBackend> backend;
 private:
-  std::string current_db{""};
-  ScapeFrontend() = default;
+  std::shared_ptr<DatabaseManager> db_manager;
+  ScapeFrontend();
   ScapeFrontend(const ScapeFrontend &) = delete;
 
 public:

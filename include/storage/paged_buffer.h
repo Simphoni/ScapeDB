@@ -30,7 +30,7 @@ private:
   // ensure file writeback function
   std::shared_ptr<FileMapping> base;
 
-  uint8_t *head_ptr, *swap_ptr;
+  uint8_t *head_ptr;
   std::vector<PageMeta> pages;
   int list_head, list_tail;
   std::unordered_map<PageLocator, int> pos2page;
@@ -55,6 +55,7 @@ public:
 
   // read a specific page from a file
   uint8_t *read_file(PageLocator pos);
+  bool mark_dirty(uint8_t *ptr);
 };
 
 class SequentialAccessor {

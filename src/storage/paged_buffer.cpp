@@ -7,9 +7,8 @@ std::shared_ptr<PagedBuffer> PagedBuffer::instance = nullptr;
 
 PagedBuffer::PagedBuffer(int pool_size, int pg_size) {
   pages.resize(pool_size);
-  assert(head_ptr != nullptr);
   head_ptr = (uint8_t *)std::aligned_alloc(pg_size, pool_size * pg_size);
-  swap_ptr = (uint8_t *)std::aligned_alloc(pg_size, pg_size);
+  assert(head_ptr != nullptr);
   for (int i = 0; i < pool_size; i++) {
     pages[i] = PageMeta(i - 1, i + 1, head_ptr + i * pg_size,
                         std::make_pair(-1, 0), false);
@@ -28,8 +27,6 @@ PagedBuffer::~PagedBuffer() {
       base->write_page(pages[i].pos, pages[i].slice);
   }
   std::free(head_ptr);
-  std::free(swap_ptr);
-  head_ptr = nullptr;
 }
 
 void PagedBuffer::list_remove(int id) {
@@ -83,17 +80,23 @@ uint8_t *PagedBuffer::read_file(PageLocator pos) {
     access(it->second);
     return pages[it->second].slice;
   }
-  if (base->read_page(pos, swap_ptr)) {
-    int id = get_replace();
-    pages[id].pos = pos;
-    pages[id].dirty = false;
-    pos2page[pos] = id;
-    std::swap(swap_ptr, pages[id].slice);
-    list_append(id);
-    return pages[id].slice;
-  } else {
-    return nullptr;
+  int id = get_replace();
+  base->read_page(pos, pages[id].slice);
+  pages[id].pos = pos;
+  pages[id].dirty = false;
+  pos2page[pos] = id;
+  list_append(id);
+  return pages[id].slice;
+}
+
+bool PagedBuffer::mark_dirty(uint8_t *ptr) {
+  if (ptr < head_ptr ||
+      ptr >= head_ptr + Config::POOLED_PAGES * Config::PAGE_SIZE) {
+    return false;
   }
+  int id = (ptr - head_ptr) / Config::PAGE_SIZE;
+  pages[id].dirty = true;
+  return true;
 }
 
 SequentialAccessor::SequentialAccessor(int fd) : fd(fd) {
@@ -156,6 +159,7 @@ std::string SequentialAccessor::read_str() {
 template <typename T> void SequentialAccessor::write(T val) {
   static_assert(std::is_integral<T>::value, "T must be integral type");
   check_buffer();
+  PagedBuffer::get()->mark_dirty(headptr);
   if (cur + sizeof(T) <= tailptr) {
     *(T *)cur = val;
     cur += sizeof(T);
@@ -170,15 +174,22 @@ template <typename T> void SequentialAccessor::write(T val) {
 void SequentialAccessor::write_str(const std::string &s) {
   write<uint32_t>(s.length());
   check_buffer();
+  PagedBuffer::get()->mark_dirty(headptr);
   if (cur + s.length() <= tailptr) {
-    memcpy(cur, s.c_str(), s.length());
+    memcpy(cur, s.data(), s.length());
     cur += s.length();
   } else {
     int len1 = tailptr - cur;
-    memcpy(cur, s.c_str(), len1);
+    memcpy(cur, s.data(), len1);
     cur += len1;
     check_buffer();
-    memcpy(cur, s.c_str() + len1, s.length() - len1);
+    memcpy(cur, s.data() + len1, s.length() - len1);
     cur += s.length() - len1;
   }
 }
+
+template int SequentialAccessor::read<int>();
+template uint32_t SequentialAccessor::read<uint32_t>();
+
+template void SequentialAccessor::write<int>(int);
+template void SequentialAccessor::write<uint32_t>(uint32_t);

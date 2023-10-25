@@ -11,6 +11,9 @@ std::string const prompt_empty = "      ->";
 
 int main(int argc, char **argv) {
   argparse::ArgumentParser parser("ScapeDB", "0.1");
+  parser.add_argument("--init")
+      .help("purge original database under default path")
+      .implicit_value(true);
   parser.add_argument("-b", "--batch")
       .help("launch ScapeDB in batch mode")
       .default_value(false)

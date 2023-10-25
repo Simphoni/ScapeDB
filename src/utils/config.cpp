@@ -8,6 +8,10 @@ std::shared_ptr<Config> Config::instance = nullptr;
 Config::Config() { db_data_root = fs::current_path() / "data"; }
 
 void Config::parse(argparse::ArgumentParser &parser) {
+  if (parser.is_used("--init")) {
+    fs::remove_all(db_data_root);
+    std::exit(0);
+  }
   batch_mode = parser.is_used("-b");
   if (parser.is_used("-d")) {
     preset_db = parser.get("-d");
@@ -28,6 +32,6 @@ void Config::parse(argparse::ArgumentParser &parser) {
     }
     assert(fs::is_directory(db_data_root));
   }
-  db_meta_file = fs::path(db_data_root) / "scape_global";
+  db_global_meta = fs::path(db_data_root) / "scape_global";
   dbs_dir = fs::path(db_data_root) / "dbs";
 }

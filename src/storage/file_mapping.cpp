@@ -29,7 +29,7 @@ int FileMapping::open_file(const std::string &file) {
   if (fds.contains(file)) {
     return fds[file];
   }
-  int fd = open(file.c_str(), O_RDWR);
+  int fd = open(file.data(), O_RDWR);
   if (fd == -1) {
     return -1;
   }
@@ -51,9 +51,7 @@ void FileMapping::close_file(const std::string &file) {
   }
 }
 
-bool FileMapping::is_open(int id) {
-  return filenames.find(id) != filenames.end();
-}
+bool FileMapping::is_open(int id) { return filenames.contains(id); }
 
 bool FileMapping::read_page(PageLocator pos, uint8_t *ptr) {
   if (!is_open(pos.first)) {

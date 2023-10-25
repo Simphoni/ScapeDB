@@ -8,6 +8,11 @@
 #include <antlr4-runtime.h>
 #include <string>
 
+ScapeFrontend::ScapeFrontend() {
+  db_manager = DatabaseManager::get();
+  db_manager->global_meta_read();
+}
+
 void ScapeFrontend::parse(const std::string &stmt) {
   antlr4::ANTLRInputStream inputStream(stmt);
   SQLLexer lexer(&inputStream);

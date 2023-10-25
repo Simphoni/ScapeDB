@@ -24,8 +24,9 @@ public:
   std::string preset_db{""};
   std::string preset_table{""};
   std::string db_data_root;
-  std::string db_meta_file{""};
+  std::string db_global_meta{""};
   std::string dbs_dir{""};
+  std::string current_db{""};
 
   static std::shared_ptr<const Config> get() {
     if (instance == nullptr) {
