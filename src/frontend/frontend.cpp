@@ -9,8 +9,8 @@
 #include <string>
 
 ScapeFrontend::ScapeFrontend() {
-  db_manager = DatabaseManager::get();
-  db_manager->global_meta_read();
+  layered_manager = GlobalManager::get();
+  layered_manager->global_meta_read();
 }
 
 void ScapeFrontend::parse(const std::string &stmt) {

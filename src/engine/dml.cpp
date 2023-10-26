@@ -4,23 +4,23 @@
 namespace DML {
 
 void create_db(const std::string &s) {
-  if (DatabaseManager::get()->get_db_id(s) != 0) {
+  if (GlobalManager::get()->get_db_id(s) != 0) {
     printf("ERROR: database %s already exists\n", s.data());
   } else {
-    DatabaseManager::get()->create_db(s);
+    GlobalManager::get()->create_db(s);
   }
 }
 
 void drop_db(const std::string &s) {
-  if (DatabaseManager::get()->get_db_id(s) == 0) {
+  if (GlobalManager::get()->get_db_id(s) == 0) {
     printf("ERROR: database %s does not exist\n", s.data());
   } else {
-    DatabaseManager::get()->drop_db(s);
+    GlobalManager::get()->drop_db(s);
   }
 }
 
 void show_dbs() {
-  const auto &dbs = DatabaseManager::get()->get_dbs();
+  const auto &dbs = GlobalManager::get()->get_dbs();
   std::vector<std::string> table;
   table.reserve(dbs.size() + 1);
   table.emplace_back("DATABASE");

@@ -9,9 +9,9 @@
 
 typedef int db_id_t;
 
-class DatabaseManager {
+class GlobalManager {
 private:
-  static std::shared_ptr<DatabaseManager> instance;
+  static std::shared_ptr<GlobalManager> instance;
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string db_global_meta;
 
@@ -21,14 +21,14 @@ private:
   bool dirty{false};
   db_id_t max_db_id{0};
 
-  DatabaseManager();
-  DatabaseManager(const DatabaseManager &) = delete;
+  GlobalManager();
+  GlobalManager(const GlobalManager &) = delete;
 
 public:
-  ~DatabaseManager();
-  static std::shared_ptr<DatabaseManager> get() {
+  ~GlobalManager();
+  static std::shared_ptr<GlobalManager> get() {
     if (instance == nullptr) {
-      instance = std::shared_ptr<DatabaseManager>(new DatabaseManager());
+      instance = std::shared_ptr<GlobalManager>(new GlobalManager());
     }
     return instance;
   }
@@ -41,4 +41,25 @@ public:
   void drop_db(const std::string &s);
   const std::map<db_id_t, std::string> &get_dbs() const;
   db_id_t get_db_id(const std::string &s) const;
+};
+
+class DatabaseManager {};
+
+enum DataType : uint8_t {
+  INT = 1,
+  FLOAT,
+  STRING,
+};
+
+class Fields {};
+
+class TableManager {
+private:
+  std::string table_name, data_dir;
+  std::string meta_file, data_file, index_file;
+  std::shared_ptr<PagedBuffer> paged_buffer;
+  std::shared_ptr<DatabaseManager> parent;
+
+public:
+  TableManager(const std::string &name);
 };

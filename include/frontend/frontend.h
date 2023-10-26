@@ -1,11 +1,11 @@
 #pragma once
 #include <memory>
-#include <storage/db_manager.h>
+#include <storage/layered_manager.h>
 #include <string>
 
 class ScapeFrontend {
 private:
-  std::shared_ptr<DatabaseManager> db_manager;
+  std::shared_ptr<GlobalManager> layered_manager;
   ScapeFrontend();
   ScapeFrontend(const ScapeFrontend &) = delete;
 

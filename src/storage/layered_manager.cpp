@@ -1,25 +1,25 @@
 #include <filesystem>
-#include <storage/db_manager.h>
 #include <storage/file_mapping.h>
+#include <storage/layered_manager.h>
 #include <storage/paged_buffer.h>
 #include <utils/config.h>
 
 namespace fs = std::filesystem;
 
-std::shared_ptr<DatabaseManager> DatabaseManager::instance = nullptr;
+std::shared_ptr<GlobalManager> GlobalManager::instance = nullptr;
 
-DatabaseManager::DatabaseManager() {
+GlobalManager::GlobalManager() {
   paged_buffer = PagedBuffer::get();
   db_global_meta = Config::get()->db_global_meta;
 }
 
-DatabaseManager::~DatabaseManager() {
+GlobalManager::~GlobalManager() {
   if (dirty) {
     global_meta_write();
   }
 }
 
-void DatabaseManager::global_meta_read() {
+void GlobalManager::global_meta_read() {
   // perform simple consistency check
   if (!fs::is_regular_file(db_global_meta)) {
     fs::remove_all(db_global_meta);
@@ -51,7 +51,7 @@ void DatabaseManager::global_meta_read() {
   }
 }
 
-void DatabaseManager::global_meta_write() const {
+void GlobalManager::global_meta_write() const {
   assert(fs::is_regular_file(db_global_meta));
   int fd = FileMapping::get()->open_file(db_global_meta);
   SequentialAccessor accessor(fd);
@@ -63,28 +63,35 @@ void DatabaseManager::global_meta_write() const {
   }
 }
 
-void DatabaseManager::create_db(const std::string &s) {
+void GlobalManager::create_db(const std::string &s) {
   db_id_t id = ++max_db_id;
   dbs.insert(std::make_pair(id, s));
   name2id.insert(std::make_pair(s, id));
   dirty = true;
 }
 
-void DatabaseManager::drop_db(const std::string &s) {
+void GlobalManager::drop_db(const std::string &s) {
   db_id_t id = name2id[s];
   dbs.erase(id);
   name2id.erase(s);
   dirty = true;
 }
 
-const std::map<db_id_t, std::string> &DatabaseManager::get_dbs() const {
+const std::map<db_id_t, std::string> &GlobalManager::get_dbs() const {
   return dbs;
 }
 
-db_id_t DatabaseManager::get_db_id(const std::string &s) const {
+db_id_t GlobalManager::get_db_id(const std::string &s) const {
   auto it = name2id.find(s);
   if (it == name2id.end()) {
     return 0;
   }
   return it->second;
+}
+
+TableManager::TableManager(const std::string &name) {
+  paged_buffer = PagedBuffer::get();
+  table_name = name;
+  data_dir = fs::path(Config::get()->dbs_dir) / table_name;
+  meta_file = fs::path(data_dir) / "";
 }

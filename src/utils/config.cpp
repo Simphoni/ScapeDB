@@ -33,6 +33,6 @@ void Config::parse(argparse::ArgumentParser &parser) {
     }
     assert(fs::is_directory(db_data_root));
   }
-  db_global_meta = fs::path(db_data_root) / "scape_global";
+  db_global_meta = fs::path(db_data_root) / "scape_global.meta";
   dbs_dir = fs::path(db_data_root) / "dbs";
 }

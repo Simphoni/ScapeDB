@@ -1,6 +1,6 @@
 #pragma once
-#include <storage/db_manager.h>
 #include <storage/file_mapping.h>
+#include <storage/layered_manager.h>
 #include <storage/paged_buffer.h>
 
 namespace DML {

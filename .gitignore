@@ -6,3 +6,5 @@ generated/
 runtime/
 # clangd cache
 .cache/
+
+.devcontainer/

@@ -2,12 +2,20 @@
 #include <frontend/frontend.h>
 #include <utils/config.h>
 
+#include <csignal>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 
 std::string const prompt = "scapedb>";
 std::string const prompt_empty = "      ->";
+
+void capture_keyboard_interrupt() {
+  signal(SIGINT, [](int) {
+    std::cout << "Forced exit due to SIGINT, files can be broken." << std::endl;
+    std::exit(0);
+  });
+}
 
 int main(int argc, char **argv) {
   argparse::ArgumentParser parser("ScapeDB", "0.1");
@@ -39,6 +47,7 @@ int main(int argc, char **argv) {
   if (cfg->preset_db != "") {
     frontend->set_db(cfg->preset_db);
   }
+  capture_keyboard_interrupt();
   if (cfg->batch_mode) {
     frontend->run_batch();
   } else {
