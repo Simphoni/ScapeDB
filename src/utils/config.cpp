@@ -13,6 +13,7 @@ void Config::parse(argparse::ArgumentParser &parser) {
     std::exit(0);
   }
   batch_mode = parser.is_used("-b");
+  stdin_is_file = !batch_mode && !isatty(fileno(stdin));
   if (parser.is_used("-d")) {
     preset_db = parser.get("-d");
   }

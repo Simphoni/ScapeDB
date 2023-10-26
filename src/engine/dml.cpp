@@ -11,7 +11,13 @@ void create_db(const std::string &s) {
   }
 }
 
-void drop_db(const std::string &s) { DatabaseManager::get()->drop_db(s); }
+void drop_db(const std::string &s) {
+  if (DatabaseManager::get()->get_db_id(s) == 0) {
+    printf("ERROR: database %s does not exist\n", s.data());
+  } else {
+    DatabaseManager::get()->drop_db(s);
+  }
+}
 
 void show_dbs() {
   const auto &dbs = DatabaseManager::get()->get_dbs();

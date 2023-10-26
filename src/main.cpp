@@ -11,9 +11,6 @@ std::string const prompt_empty = "      ->";
 
 int main(int argc, char **argv) {
   argparse::ArgumentParser parser("ScapeDB", "0.1");
-  parser.add_argument("--init")
-      .help("purge original database under default path")
-      .implicit_value(true);
   parser.add_argument("-b", "--batch")
       .help("launch ScapeDB in batch mode")
       .default_value(false)
@@ -24,6 +21,9 @@ int main(int argc, char **argv) {
       .help("specify <table: string> to operate on");
   parser.add_argument("-f", "--filepath")
       .help("specify <path: string> to the file containing import commands");
+  parser.add_argument("--init")
+      .help("purge original database under default path")
+      .implicit_value(true);
   parser.add_argument("--data-dir")
       .help("specify <datadir: string = \"./data\"> as root of database files");
   try {
@@ -48,6 +48,9 @@ int main(int argc, char **argv) {
     loi.reserve(512);
     while (!std::getline(std::cin, loi).eof()) {
       stmt += loi;
+      if (loi == "exit" || loi == "EXIT") {
+        break;
+      }
       if (loi.back() == ';') {
         frontend->run_interactive(stmt);
         stmt = "";

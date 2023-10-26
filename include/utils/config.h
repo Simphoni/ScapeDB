@@ -20,6 +20,7 @@ public:
   static uint32_t const SCAPE_SIGNATURE = 0x007a6a78;
 
   bool batch_mode{false};
+  bool stdin_is_file{false};
   std::string import_command_file{""};
   std::string preset_db{""};
   std::string preset_table{""};

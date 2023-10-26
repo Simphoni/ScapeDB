@@ -27,7 +27,9 @@ void ScapeFrontend::parse(const std::string &stmt) {
 void ScapeFrontend::set_db(const std::string &db_name) {}
 
 void ScapeFrontend::run_interactive(const std::string &stmt) {
-  std::cout << stmt << std::endl;
+  if (Config::get()->stdin_is_file) {
+    std::cout << stmt << std::endl;
+  }
   parse(stmt);
 }
 
