@@ -1,7 +1,6 @@
 #pragma once
-#include <storage/file_mapping.h>
-#include <storage/layered_manager.h>
-#include <storage/paged_buffer.h>
+#include <engine/layered_manager.h>
+#include <storage/storage.h>
 
 namespace DML {
 

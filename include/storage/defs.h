@@ -8,5 +8,6 @@
 
 class PagedBuffer;
 class FileMapping;
+class SequentialAccessor;
 
 typedef std::pair<int, int> PageLocator;

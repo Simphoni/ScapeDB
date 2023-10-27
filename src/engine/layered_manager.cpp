@@ -1,6 +1,6 @@
+#include <engine/layered_manager.h>
 #include <filesystem>
 #include <storage/file_mapping.h>
-#include <storage/layered_manager.h>
 #include <storage/paged_buffer.h>
 #include <utils/config.h>
 #include <utils/misc.h>
@@ -78,11 +78,6 @@ void GlobalManager::drop_db(const std::string &s) {
   dirty = true;
 }
 
-const std::map<db_id_t, std::shared_ptr<DatabaseManager>> &
-GlobalManager::get_dbs() const {
-  return dbs;
-}
-
 db_id_t GlobalManager::get_db_id(const std::string &s) const {
   auto it = name2id.find(s);
   if (it == name2id.end()) {
@@ -109,15 +104,11 @@ DatabaseManager::DatabaseManager(const std::string &name) {
       tbl_id_t tbl_id = accessor.read<tbl_id_t>();
       std::string table_name = accessor.read_str();
       auto tbl = TableManager::build(shared_from_this(), table_name);
+      tbl->table_meta_read();
       tables.insert(std::make_pair(tbl_id, tbl));
       name2id.insert(std::make_pair(table_name, tbl_id));
     }
   }
-}
-
-const std::map<tbl_id_t, std::shared_ptr<TableManager>> &
-DatabaseManager::get_tables() const {
-  return tables;
 }
 
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
@@ -130,19 +121,20 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
   ensure_file(meta_file);
   ensure_file(data_file);
   ensure_file(index_file);
+}
+
+void TableManager::table_meta_read() {
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
     accessor.reset();
     accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
     accessor.write<uint32_t>(0);
   } else {
-    int schema_count = accessor.read<uint32_t>();
-    schema.reserve(schema_count);
-    for (int i = 0; i < schema_count; i++) {
-      std::string field_name = accessor.read_str();
-      DataType field_type = static_cast<DataType>(accessor.read<uint8_t>());
-      schema.emplace_back(field_name, field_type);
-      name2col.insert(std::make_pair(field_name, i));
+    int field_count = accessor.read<uint32_t>();
+    fields.resize(field_count);
+    for (int i = 0; i < field_count; i++) {
+      fields[i].deserialize(accessor);
+      name2col.insert(std::make_pair(fields[i].field_name, i));
     }
     // TODO: read index metadata
   }

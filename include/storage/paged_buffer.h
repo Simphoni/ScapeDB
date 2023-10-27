@@ -1,9 +1,9 @@
 #pragma once
 
-#include "storage/file_mapping.h"
 #include <cstdint>
 #include <memory>
 #include <storage/defs.h>
+#include <storage/file_mapping.h>
 #include <unordered_map>
 #include <utils/config.h>
 #include <vector>
@@ -72,17 +72,17 @@ private:
       tailptr = headptr + Config::PAGE_SIZE;
     }
   }
-  uint8_t read_byte();
-  void write_byte(uint8_t byte);
 
 public:
   SequentialAccessor(int fd);
 
   void reset();
 
+  uint8_t read_byte();
   template <typename T> T read();
   std::string read_str();
 
+  void write_byte(uint8_t byte);
   template <typename T> void write(T val);
   void write_str(const std::string &val);
 };

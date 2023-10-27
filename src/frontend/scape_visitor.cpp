@@ -1,5 +1,7 @@
 #include <engine/dml.h>
+#include <engine/layered_manager.h>
 #include <frontend/scape_visitor.h>
+#include <storage/storage.h>
 
 std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
   return visitChildren(ctx);

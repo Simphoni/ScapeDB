@@ -6,14 +6,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include <storage/paged_buffer.h>
+#include <engine/defs.h>
+#include <storage/storage.h>
 #include <utils/config.h>
-
-typedef int db_id_t;
-typedef int tbl_id_t;
-
-class DatabaseManager;
-class TableManager;
 
 class GlobalManager {
 private:
@@ -45,7 +40,9 @@ public:
   void global_meta_write() const;
   void create_db(const std::string &s);
   void drop_db(const std::string &s);
-  const std::map<db_id_t, std::shared_ptr<DatabaseManager>> &get_dbs() const;
+  const std::map<db_id_t, std::shared_ptr<DatabaseManager>> &get_dbs() const {
+    return dbs;
+  }
   db_id_t get_db_id(const std::string &s) const;
 };
 
@@ -57,6 +54,7 @@ private:
   std::string db_name, db_dir, db_meta;
   std::map<tbl_id_t, std::shared_ptr<TableManager>> tables;
   std::unordered_map<std::string, tbl_id_t> name2id;
+  bool dirty{false};
 
   DatabaseManager(const std::string &name);
 
@@ -66,13 +64,9 @@ public:
   }
 
   inline std::string get_name() const noexcept { return db_name; }
-  const std::map<tbl_id_t, std::shared_ptr<TableManager>> &get_tables() const;
-};
-
-enum DataType : uint8_t {
-  INT = 1,
-  FLOAT,
-  VARCHAR,
+  const std::map<tbl_id_t, std::shared_ptr<TableManager>> &get_tables() const {
+    return tables;
+  }
 };
 
 class TableManager {
@@ -82,8 +76,9 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::shared_ptr<DatabaseManager> parent;
 
-  std::vector<std::pair<std::string, DataType>> schema;
+  std::vector<Field> fields;
   std::unordered_map<std::string, int> name2col;
+  bool dirty{false};
 
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
 
@@ -94,4 +89,6 @@ public:
   }
 
   inline std::string get_name() const noexcept { return table_name; }
+
+  void table_meta_read();
 };
