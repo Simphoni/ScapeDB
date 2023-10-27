@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 
+class DatabaseManager;
+
 class Config {
 private:
   Config();
@@ -27,7 +29,6 @@ public:
   std::string db_data_root;
   std::string db_global_meta{""};
   std::string dbs_dir{""};
-  std::string current_db{""};
 
   static std::shared_ptr<const Config> get() {
     if (instance == nullptr) {

@@ -1,4 +1,5 @@
 #include <engine/dml.h>
+#include <frontend/frontend.h>
 #include <utils/logger.h>
 
 namespace DML {
@@ -16,6 +17,10 @@ void drop_db(const std::string &s) {
     printf("ERROR: database %s does not exist\n", s.data());
   } else {
     GlobalManager::get()->drop_db(s);
+    // make sure current db exists
+    if (ScapeFrontend::get()->get_current_db() == s) {
+      ScapeFrontend::get()->set_db("");
+    }
   }
 }
 
@@ -25,9 +30,17 @@ void show_dbs() {
   table.reserve(dbs.size() + 1);
   table.emplace_back("DATABASE");
   for (const auto &db : dbs) {
-    table.emplace_back(db.second);
+    table.emplace_back(db.second->get_name());
   }
   Logger::tabulate(table, dbs.size() + 1, 1);
+}
+
+void use_db(const std::string &s) {
+  if (GlobalManager::get()->get_db_id(s) == 0) {
+    printf("ERROR: database %s does not exist\n", s.data());
+  } else {
+    ScapeFrontend::get()->set_db(s);
+  }
 }
 
 } // namespace DML

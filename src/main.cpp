@@ -1,4 +1,5 @@
 #include <argparse/argparse.hpp>
+#include <engine/dml.h>
 #include <frontend/frontend.h>
 #include <utils/config.h>
 
@@ -7,8 +8,7 @@
 #include <stdexcept>
 #include <string>
 
-std::string const prompt = "scapedb>";
-std::string const prompt_empty = "      ->";
+std::string const prompt = "scapedb";
 
 void capture_keyboard_interrupt() {
   signal(SIGINT, [](int) {
@@ -43,15 +43,16 @@ int main(int argc, char **argv) {
   }
   Config::get_mut()->parse(parser);
   auto cfg = Config::get();
-  auto frontend = ScapeFrontend::build();
+  auto frontend = ScapeFrontend::get();
   if (cfg->preset_db != "") {
-    frontend->set_db(cfg->preset_db);
+    DML::use_db(cfg->preset_db);
   }
   capture_keyboard_interrupt();
   if (cfg->batch_mode) {
     frontend->run_batch();
   } else {
-    std::cout << prompt;
+    std::string _prompt = prompt + "(" + frontend->get_current_db() + ")";
+    std::cout << _prompt + "> ";
     std::string stmt, loi; // line of input
     stmt.reserve(512);
     loi.reserve(512);
@@ -63,9 +64,10 @@ int main(int argc, char **argv) {
       if (loi.back() == ';') {
         frontend->run_interactive(stmt);
         stmt = "";
-        std::cout << prompt;
+        _prompt = prompt + "(" + frontend->get_current_db() + ")";
+        std::cout << _prompt + "> ";
       } else {
-        std::cout << prompt_empty;
+        std::cout << std::string(_prompt.size(), ' ') + "> ";
       }
     }
   }

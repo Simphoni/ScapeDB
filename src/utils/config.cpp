@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <utils/config.h>
+#include <utils/misc.h>
 
 namespace fs = std::filesystem;
 
@@ -25,14 +26,9 @@ void Config::parse(argparse::ArgumentParser &parser) {
   }
   if (parser.is_used("--data-dir")) {
     db_data_root = parser.get("--data-dir");
-    assert(fs::exists(db_data_root));
-    assert(fs::is_directory(db_data_root));
-  } else {
-    if (!fs::exists(db_data_root)) {
-      assert(fs::create_directory(db_data_root));
-    }
-    assert(fs::is_directory(db_data_root));
   }
+  ensure_directory(db_data_root);
   db_global_meta = fs::path(db_data_root) / "scape_global.meta";
   dbs_dir = fs::path(db_data_root) / "dbs";
+  ensure_directory(dbs_dir);
 }

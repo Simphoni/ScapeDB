@@ -26,3 +26,9 @@ std::any ScapeVisitor::visitShow_dbs(SQLParser::Show_dbsContext *ctx) {
   DML::show_dbs();
   return true;
 }
+
+std::any ScapeVisitor::visitUse_db(SQLParser::Use_dbContext *ctx) {
+  std::string db_name = ctx->Identifier()->getSymbol()->getText();
+  DML::use_db(db_name);
+  return db_name;
+}

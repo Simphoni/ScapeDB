@@ -1,13 +1,19 @@
 #pragma once
 
-#include "storage/paged_buffer.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
-#include <utils/config.h>
 #include <vector>
 
+#include <storage/paged_buffer.h>
+#include <utils/config.h>
+
 typedef int db_id_t;
+typedef int tbl_id_t;
+
+class DatabaseManager;
+class TableManager;
 
 class GlobalManager {
 private:
@@ -15,7 +21,7 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string db_global_meta;
 
-  std::map<db_id_t, std::string> dbs;
+  std::map<db_id_t, std::shared_ptr<DatabaseManager>> dbs;
   std::unordered_map<std::string, db_id_t> name2id;
 
   bool dirty{false};
@@ -39,11 +45,28 @@ public:
   void global_meta_write() const;
   void create_db(const std::string &s);
   void drop_db(const std::string &s);
-  const std::map<db_id_t, std::string> &get_dbs() const;
+  const std::map<db_id_t, std::shared_ptr<DatabaseManager>> &get_dbs() const;
   db_id_t get_db_id(const std::string &s) const;
 };
 
-class DatabaseManager {};
+class DatabaseManager : public std::enable_shared_from_this<DatabaseManager> {
+private:
+  friend class TableManager;
+  std::shared_ptr<PagedBuffer> paged_buffer;
+
+  std::string db_name, db_dir, db_meta;
+  std::map<tbl_id_t, std::shared_ptr<TableManager>> tables;
+  std::unordered_map<std::string, tbl_id_t> name2id;
+
+  DatabaseManager(const std::string &name);
+
+public:
+  static std::shared_ptr<DatabaseManager> build(const std::string &name) {
+    return std::shared_ptr<DatabaseManager>(new DatabaseManager(name));
+  }
+
+  inline std::string get_name() const noexcept { return db_name; }
+};
 
 enum DataType : uint8_t {
   INT = 1,
@@ -55,11 +78,16 @@ class Fields {};
 
 class TableManager {
 private:
-  std::string table_name, data_dir;
+  std::string table_name;
   std::string meta_file, data_file, index_file;
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::shared_ptr<DatabaseManager> parent;
 
+  TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
+
 public:
-  TableManager(const std::string &name);
+  static std::shared_ptr<TableManager>
+  build(std::shared_ptr<DatabaseManager> par, const std::string &name) {
+    return std::shared_ptr<TableManager>(new TableManager(par, name));
+  }
 };
