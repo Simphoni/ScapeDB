@@ -66,15 +66,14 @@ public:
   }
 
   inline std::string get_name() const noexcept { return db_name; }
+  const std::map<tbl_id_t, std::shared_ptr<TableManager>> &get_tables() const;
 };
 
 enum DataType : uint8_t {
   INT = 1,
   FLOAT,
-  STRING,
+  VARCHAR,
 };
-
-class Fields {};
 
 class TableManager {
 private:
@@ -83,6 +82,9 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::shared_ptr<DatabaseManager> parent;
 
+  std::vector<std::pair<std::string, DataType>> schema;
+  std::unordered_map<std::string, int> name2col;
+
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
 
 public:
@@ -90,4 +92,6 @@ public:
   build(std::shared_ptr<DatabaseManager> par, const std::string &name) {
     return std::shared_ptr<TableManager>(new TableManager(par, name));
   }
+
+  inline std::string get_name() const noexcept { return table_name; }
 };

@@ -31,14 +31,20 @@ void tabulate_interactive(const std::vector<std::string> &content, int nrow,
 }
 
 // output in csv format
-void tabulate_batch() {}
+void tabulate_batch(const std::vector<std::string> &content, int nrow,
+                    int ncol) {
+  for (int i = 0; i < nrow; i++) {
+    for (int j = 0; j < ncol; j++)
+      printf("%s%c", content[i * ncol + j].data(), j == ncol - 1 ? '\n' : ',');
+  }
+}
 
 void tabulate(const std::vector<std::string> &content, int nrow, int ncol) {
   assert(content.size() == nrow * ncol);
   if (!Config::get()->batch_mode) {
     tabulate_interactive(content, nrow, ncol);
   } else {
-    tabulate_batch();
+    tabulate_batch(content, nrow, ncol);
   }
 }
 

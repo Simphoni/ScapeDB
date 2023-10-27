@@ -36,11 +36,11 @@ void ScapeFrontend::set_db(const std::string &db_name) {
   }
 }
 
-void ScapeFrontend::run_interactive(const std::string &stmt) {
+void ScapeFrontend::execute(const std::string &stmt) {
   if (Config::get()->stdin_is_file) {
     std::cout << stmt << std::endl;
   }
   parse(stmt);
+  if (Config::get()->batch_mode)
+    std::cout << "@" << std::endl;
 }
-
-void ScapeFrontend::run_batch() {}

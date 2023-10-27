@@ -24,8 +24,7 @@ public:
   }
   void parse(const std::string &stmt);
   void set_db(const std::string &db_name);
-  void run_interactive(const std::string &s);
-  void run_batch();
+  void execute(const std::string &s);
 
   std::string get_current_db() const noexcept { return current_db; }
   db_id_t get_current_db_id() const noexcept { return database_id; }

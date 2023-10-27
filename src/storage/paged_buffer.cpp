@@ -188,6 +188,7 @@ void SequentialAccessor::write_str(const std::string &s) {
   }
 }
 
+template uint8_t SequentialAccessor::read<uint8_t>();
 template int SequentialAccessor::read<int>();
 template uint32_t SequentialAccessor::read<uint32_t>();
 

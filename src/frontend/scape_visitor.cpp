@@ -32,3 +32,8 @@ std::any ScapeVisitor::visitUse_db(SQLParser::Use_dbContext *ctx) {
   DML::use_db(db_name);
   return db_name;
 }
+
+std::any ScapeVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
+  DML::show_tables();
+  return true;
+}

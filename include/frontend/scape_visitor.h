@@ -19,6 +19,8 @@ public:
 
   std::any visitUse_db(SQLParser::Use_dbContext *ctx) override;
 
+  std::any visitShow_tables(SQLParser::Show_tablesContext *ctx) override;
+
   static std::shared_ptr<ScapeVisitor> build() {
     return std::shared_ptr<ScapeVisitor>(new ScapeVisitor());
   }

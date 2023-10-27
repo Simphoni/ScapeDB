@@ -48,27 +48,26 @@ int main(int argc, char **argv) {
     DML::use_db(cfg->preset_db);
   }
   capture_keyboard_interrupt();
-  if (cfg->batch_mode) {
-    frontend->run_batch();
-  } else {
-    std::string _prompt = prompt + "(" + frontend->get_current_db() + ")";
+  std::string _prompt = prompt + "(" + frontend->get_current_db() + ")";
+  if (!cfg->batch_mode)
     std::cout << _prompt + "> ";
-    std::string stmt, loi; // line of input
-    stmt.reserve(512);
-    loi.reserve(512);
-    while (!std::getline(std::cin, loi).eof()) {
-      stmt += loi;
-      if (loi == "exit" || loi == "EXIT") {
-        break;
-      }
-      if (loi.back() == ';') {
-        frontend->run_interactive(stmt);
-        stmt = "";
-        _prompt = prompt + "(" + frontend->get_current_db() + ")";
+  std::string stmt, loi; // line of input
+  stmt.reserve(512);
+  loi.reserve(512);
+  while (!std::getline(std::cin, loi).eof()) {
+    stmt += loi;
+    if (loi == "exit" || loi == "EXIT") {
+      break;
+    }
+    if (loi.back() == ';') {
+      frontend->execute(stmt);
+      stmt = "";
+      _prompt = prompt + "(" + frontend->get_current_db() + ")";
+      if (!cfg->batch_mode)
         std::cout << _prompt + "> ";
-      } else {
+    } else {
+      if (!cfg->batch_mode)
         std::cout << std::string(_prompt.size(), ' ') + "> ";
-      }
     }
   }
   return 0;

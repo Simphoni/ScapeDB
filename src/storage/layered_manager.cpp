@@ -108,11 +108,16 @@ DatabaseManager::DatabaseManager(const std::string &name) {
     for (int i = 0; i < table_count; i++) {
       tbl_id_t tbl_id = accessor.read<tbl_id_t>();
       std::string table_name = accessor.read_str();
-      tables.insert(std::make_pair(
-          tbl_id, TableManager::build(shared_from_this(), table_name)));
+      auto tbl = TableManager::build(shared_from_this(), table_name);
+      tables.insert(std::make_pair(tbl_id, tbl));
       name2id.insert(std::make_pair(table_name, tbl_id));
     }
   }
+}
+
+const std::map<tbl_id_t, std::shared_ptr<TableManager>> &
+DatabaseManager::get_tables() const {
+  return tables;
 }
 
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
@@ -125,4 +130,20 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
   ensure_file(meta_file);
   ensure_file(data_file);
   ensure_file(index_file);
+  SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
+  if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
+    accessor.reset();
+    accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
+    accessor.write<uint32_t>(0);
+  } else {
+    int schema_count = accessor.read<uint32_t>();
+    schema.reserve(schema_count);
+    for (int i = 0; i < schema_count; i++) {
+      std::string field_name = accessor.read_str();
+      DataType field_type = static_cast<DataType>(accessor.read<uint8_t>());
+      schema.emplace_back(field_name, field_type);
+      name2col.insert(std::make_pair(field_name, i));
+    }
+    // TODO: read index metadata
+  }
 }
