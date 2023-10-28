@@ -5,7 +5,7 @@
 namespace fs = std::filesystem;
 
 void ensure_file(const std::string &path) {
-  if (fs::is_directory(path)) {
+  if (!fs::is_regular_file(path)) {
     fs::remove_all(path);
   }
   if (!fs::exists(path)) {
@@ -15,8 +15,8 @@ void ensure_file(const std::string &path) {
 }
 
 void ensure_directory(const std::string &path) {
-  if (fs::is_regular_file(path)) {
-    fs::remove(path);
+  if (!fs::is_directory(path)) {
+    fs::remove_all(path);
   }
   if (!fs::exists(path)) {
     fs::create_directory(path);

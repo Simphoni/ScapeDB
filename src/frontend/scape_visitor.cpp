@@ -52,6 +52,19 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   return tbl_name;
 }
 
+std::any ScapeVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
+  std::string tbl_name = ctx->Identifier()->getText();
+  DML::drop_table(tbl_name);
+  return tbl_name;
+}
+
+std::any
+ScapeVisitor::visitDescribe_table(SQLParser::Describe_tableContext *ctx) {
+  std::string tbl_name = ctx->Identifier()->getText();
+  DML::describe_table(tbl_name);
+  return tbl_name;
+}
+
 std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
   std::vector<Field> fields;
   fields.reserve(ctx->field().size());
@@ -67,13 +80,17 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 }
 
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
+  ctx->type_()->accept(this);
   DataType dtype = cast_str2type(ctx->type_()->getText());
   Field field(ctx->Identifier()->getText(), dtype, NORMAL);
+  if (dtype == VARCHAR) {
+    field.len = stoi(ctx->type_()->Integer()->getText());
+  }
   field.field_id = get_unified_id();
   if (ctx->Null() != nullptr) {
     field.notnull = true;
   }
-  field.default_value = std::nullopt;
+  field.default_value = std::monostate{};
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
     if (!val.has_value()) {

@@ -51,7 +51,7 @@ void FileMapping::close_file(const std::string &file) {
   }
 }
 
-bool FileMapping::is_open(int id) { return filenames.contains(id); }
+bool FileMapping::is_open(int id) const { return filenames.contains(id); }
 
 bool FileMapping::read_page(PageLocator pos, uint8_t *ptr) {
   if (!is_open(pos.first)) {
@@ -75,4 +75,9 @@ bool FileMapping::write_page(PageLocator pos, uint8_t *ptr) {
     return false;
   auto ret = write(pos.first, (void *)ptr, Config::PAGE_SIZE);
   return ret != -1;
+}
+
+void FileMapping::purge(const std::string &s) {
+  fs::remove(s);
+  close_file(s);
 }

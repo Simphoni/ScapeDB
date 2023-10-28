@@ -37,8 +37,7 @@ struct Field {
   KeyType key_type;
   bool notnull;
   int len{0}; // for varchar
-  std::optional<std::variant<std::monostate, int, float, std::string>>
-      default_value;
+  std::variant<std::monostate, int, float, std::string> default_value;
   unified_id_t field_id;
 
   // we provide only basic constructors, user can freely modify other members
@@ -48,4 +47,9 @@ struct Field {
   void deserialize(SequentialAccessor &s);
   void serialize(SequentialAccessor &s) const;
   std::string to_string() const;
+
+  std::string type_str() const {
+    return type2str(data_type) +
+           (data_type == VARCHAR ? "(" + std::to_string(len) + ")" : "");
+  }
 };

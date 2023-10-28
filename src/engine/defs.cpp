@@ -1,6 +1,7 @@
 #include <cassert>
 #include <engine/defs.h>
 #include <storage/storage.h>
+#include <variant>
 
 unified_id_t get_unified_id() {
   static unified_id_t id = 0;
@@ -15,7 +16,7 @@ DataType cast_str2type(const std::string &s) {
     return INT;
   } else if (s == "FLOAT") {
     return FLOAT;
-  } else if (s == "VARCHAR") {
+  } else if (std::string_view(s.data(), 7) == "VARCHAR") {
     return VARCHAR;
   } else {
     assert(false);
@@ -54,17 +55,18 @@ void Field::serialize(SequentialAccessor &s) const {
   s.write_byte(key_type);
   s.write_byte((uint8_t)notnull);
   s.write<int>(len);
-  s.write_byte(default_value.has_value());
-  if (default_value.has_value()) {
+  bool is_null = std::holds_alternative<std::monostate>(default_value);
+  s.write_byte(!is_null);
+  if (!is_null) {
     switch (data_type) {
     case INT:
-      s.write(std::get<int>(default_value.value()));
+      s.write(std::get<int>(default_value));
       break;
     case FLOAT:
-      s.write(cast_f2i(std::get<float>(default_value.value())));
+      s.write(cast_f2i(std::get<float>(default_value)));
       break;
     case VARCHAR:
-      s.write_str(std::get<std::string>(default_value.value()));
+      s.write_str(std::get<std::string>(default_value));
       break;
     default:
       assert(false);
@@ -95,26 +97,26 @@ void Field::deserialize(SequentialAccessor &s) {
       assert(false);
     }
   } else {
-    default_value = std::nullopt;
+    default_value = std::monostate{};
   }
 }
 
 std::string Field::to_string() const {
-  std::string ret = field_name + "(" + type2str(data_type) + "," +
-                    key2str(key_type) + "(" + std::to_string(len) + ")" + ",";
+  std::string ret = field_name + "(" + type2str(data_type) + "," + type_str() +
+                    "(" + std::to_string(len) + ")" + ",";
   if (notnull) {
     ret += "NOT NULL,";
   }
-  if (default_value.has_value()) {
+  if (!std::holds_alternative<std::monostate>(default_value)) {
     switch (data_type) {
     case INT:
-      ret += std::to_string(std::get<int>(default_value.value()));
+      ret += std::to_string(std::get<int>(default_value));
       break;
     case FLOAT:
-      ret += std::to_string(std::get<float>(default_value.value()));
+      ret += std::to_string(std::get<float>(default_value));
       break;
     case VARCHAR:
-      ret += std::get<std::string>(default_value.value());
+      ret += std::get<std::string>(default_value);
       break;
     default:
       assert(false);

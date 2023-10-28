@@ -12,5 +12,7 @@ void show_tables();
 void show_indexes();
 
 void create_table(const std::string &s, std::vector<Field> &&fields);
+void drop_table(const std::string &s);
+void describe_table(const std::string &s);
 
 } // namespace DML

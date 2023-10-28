@@ -28,5 +28,6 @@ public:
   void close_file(const std::string &file);
   bool read_page(PageLocator pos, uint8_t *ptr);
   bool write_page(PageLocator pos, uint8_t *ptr);
-  bool is_open(int id);
+  bool is_open(int id) const;
+  void purge(const std::string &s);
 };

@@ -22,6 +22,10 @@ public:
 
   std::any visitCreate_table(SQLParser::Create_tableContext *ctx) override;
 
+  std::any visitDrop_table(SQLParser::Drop_tableContext *ctx) override;
+
+  std::any visitDescribe_table(SQLParser::Describe_tableContext *ctx) override;
+
   std::any visitField_list(SQLParser::Field_listContext *ctx) override;
 
   std::any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;

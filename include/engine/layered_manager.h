@@ -71,7 +71,10 @@ public:
   }
 
   void create_table(const std::string &name, std::vector<Field> &&fields);
+  void drop_table(const std::string &name);
   unified_id_t get_table_id(const std::string &s) const;
+
+  void purge();
 };
 
 class TableManager {
@@ -103,7 +106,10 @@ public:
   }
 
   inline std::string get_name() const noexcept { return table_name; }
+  const std::vector<Field> &get_fields() const noexcept { return fields; }
 
   void table_meta_read();
   void table_meta_write();
+
+  void purge();
 };

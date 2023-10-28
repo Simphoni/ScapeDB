@@ -1,8 +1,7 @@
-#include "engine/defs.h"
+#include "storage/file_mapping.h"
 #include <engine/layered_manager.h>
 #include <filesystem>
-#include <storage/file_mapping.h>
-#include <storage/paged_buffer.h>
+#include <storage/storage.h>
 #include <utils/config.h>
 #include <utils/misc.h>
 
@@ -23,20 +22,14 @@ GlobalManager::~GlobalManager() {
 }
 
 void GlobalManager::global_meta_read() {
-  // perform simple consistency check
-  if (!fs::is_regular_file(db_global_meta)) {
-    fs::remove_all(db_global_meta);
-  }
   ensure_file(db_global_meta);
   int fd = FileMapping::get()->open_file(db_global_meta);
   SequentialAccessor accessor(fd);
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    // invalid signature, reset database
     accessor.reset();
     accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
     accessor.write<uint32_t>(0);
   } else {
-    // valid signature, read database
     uint32_t db_count = accessor.read<uint32_t>();
     for (size_t i = 0; i < db_count; i++) {
       unified_id_t db_id = get_unified_id();
@@ -72,9 +65,10 @@ void GlobalManager::drop_db(const std::string &s) {
   if (!name2id.contains(s))
     return;
   // TODO: unset dirty to avoid unnecessary write
-  fs::remove_all(fs::path(Config::get()->dbs_dir) / s);
   unified_id_t id = name2id[s];
-  dbs.erase(id);
+  auto it = dbs.find(id);
+  it->second->purge();
+  dbs.erase(it->first);
   name2id.erase(s);
   dirty = true;
 }
@@ -139,12 +133,33 @@ unified_id_t DatabaseManager::get_table_id(const std::string &s) const {
   return it->second;
 }
 
+void DatabaseManager::purge() {
+  for (auto &[id, tbl] : tables) {
+    tbl->purge();
+  }
+  tables.clear();
+  FileMapping::get()->purge(db_meta);
+  fs::remove_all(db_dir);
+  dirty = false;
+}
+
 void DatabaseManager::create_table(const std::string &name,
                                    std::vector<Field> &&fields) {
   auto tbl = TableManager::build(shared_from_this(), name, std::move(fields));
   unified_id_t tbl_id = get_unified_id();
   tables.insert(std::make_pair(tbl_id, tbl));
   name2id.insert(std::make_pair(name, tbl_id));
+  dirty = true;
+}
+
+void DatabaseManager::drop_table(const std::string &name) {
+  auto it = name2id.find(name);
+  if (it == name2id.end())
+    return;
+  unified_id_t id = it->second;
+  name2id.erase(it);
+  tables[id]->purge();
+  tables.erase(id);
   dirty = true;
 }
 
@@ -163,7 +178,7 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
                            const std::string &name, std::vector<Field> &&fields)
     : TableManager(par, name) {
-  fields = std::move(fields);
+  this->fields = std::move(fields);
   dirty = true;
 }
 
@@ -198,4 +213,11 @@ void TableManager::table_meta_write() {
     field.serialize(accessor);
   }
   // TODO: write index metadata
+}
+
+void TableManager::purge() {
+  FileMapping::get()->purge(meta_file);
+  FileMapping::get()->purge(data_file);
+  FileMapping::get()->purge(index_file);
+  dirty = false;
 }
