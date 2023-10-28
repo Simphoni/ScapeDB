@@ -59,4 +59,17 @@ void show_tables() {
   Logger::tabulate(table, table.size(), 1);
 }
 
+void create_table(const std::string &s, std::vector<Field> &&fields) {
+  if (ScapeFrontend::get()->get_current_db_id() == 0) {
+    printf("ERROR: no database selected\n");
+    return;
+  }
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db->get_table_id(s) != 0) {
+    printf("ERROR: table %s already exists\n", s.data());
+  } else {
+    db->create_table(s, std::move(fields));
+  }
+}
+
 } // namespace DML

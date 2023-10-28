@@ -11,4 +11,6 @@ void use_db(const std::string &s);
 void show_tables();
 void show_indexes();
 
+void create_table(const std::string &s, std::vector<Field> &&fields);
+
 } // namespace DML

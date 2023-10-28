@@ -19,8 +19,9 @@ void ScapeFrontend::parse(const std::string &stmt) {
   SQLParser parser(&tokenStream);
   parser.setBuildParseTree(true);
   auto tree = parser.program();
-  auto planner = ScapeVisitor::build();
+  auto planner = new ScapeVisitor;
   planner->visitProgram(tree);
+  delete planner;
 }
 
 void ScapeFrontend::set_db(const std::string &db_name) {

@@ -3,7 +3,6 @@
 #include <SQLVisitor.h>
 
 #include <antlr4-runtime.h>
-#include <memory>
 
 class ScapeVisitor : public SQLBaseVisitor {
 public:
@@ -21,7 +20,21 @@ public:
 
   std::any visitShow_tables(SQLParser::Show_tablesContext *ctx) override;
 
-  static std::shared_ptr<ScapeVisitor> build() {
-    return std::shared_ptr<ScapeVisitor>(new ScapeVisitor());
+  std::any visitCreate_table(SQLParser::Create_tableContext *ctx) override;
+
+  std::any visitField_list(SQLParser::Field_listContext *ctx) override;
+
+  std::any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;
+
+  virtual std::any
+  visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) override {
+    return visitChildren(ctx);
   }
+
+  virtual std::any
+  visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  std::any visitValue(SQLParser::ValueContext *ctx) override;
 };

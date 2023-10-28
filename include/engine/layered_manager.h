@@ -16,11 +16,10 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string db_global_meta;
 
-  std::map<db_id_t, std::shared_ptr<DatabaseManager>> dbs;
-  std::unordered_map<std::string, db_id_t> name2id;
+  std::map<unified_id_t, std::shared_ptr<DatabaseManager>> dbs;
+  std::unordered_map<std::string, unified_id_t> name2id;
 
   bool dirty{false};
-  db_id_t max_db_id{0};
 
   GlobalManager();
   GlobalManager(const GlobalManager &) = delete;
@@ -34,16 +33,15 @@ public:
     return instance;
   }
 
-  // reads the global meta file to initializes the database
   void global_meta_read();
-  // metadata must be written back after each db operation
   void global_meta_write() const;
   void create_db(const std::string &s);
   void drop_db(const std::string &s);
-  const std::map<db_id_t, std::shared_ptr<DatabaseManager>> &get_dbs() const {
+  const std::map<unified_id_t, std::shared_ptr<DatabaseManager>> &
+  get_dbs() const {
     return dbs;
   }
-  db_id_t get_db_id(const std::string &s) const;
+  unified_id_t get_db_id(const std::string &s) const;
 };
 
 class DatabaseManager : public std::enable_shared_from_this<DatabaseManager> {
@@ -52,21 +50,28 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
 
   std::string db_name, db_dir, db_meta;
-  std::map<tbl_id_t, std::shared_ptr<TableManager>> tables;
-  std::unordered_map<std::string, tbl_id_t> name2id;
+  std::map<unified_id_t, std::shared_ptr<TableManager>> tables;
+  std::unordered_map<std::string, unified_id_t> name2id;
   bool dirty{false};
 
   DatabaseManager(const std::string &name);
 
 public:
+  ~DatabaseManager();
   static std::shared_ptr<DatabaseManager> build(const std::string &name) {
     return std::shared_ptr<DatabaseManager>(new DatabaseManager(name));
   }
+  void db_meta_read();
+  void db_meta_write();
 
   inline std::string get_name() const noexcept { return db_name; }
-  const std::map<tbl_id_t, std::shared_ptr<TableManager>> &get_tables() const {
+  const std::map<unified_id_t, std::shared_ptr<TableManager>> &
+  get_tables() const {
     return tables;
   }
+
+  void create_table(const std::string &name, std::vector<Field> &&fields);
+  unified_id_t get_table_id(const std::string &s) const;
 };
 
 class TableManager {
@@ -74,21 +79,31 @@ private:
   std::string table_name;
   std::string meta_file, data_file, index_file;
   std::shared_ptr<PagedBuffer> paged_buffer;
-  std::shared_ptr<DatabaseManager> parent;
+  std::string parent;
 
   std::vector<Field> fields;
   std::unordered_map<std::string, int> name2col;
   bool dirty{false};
 
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
+  TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name,
+               std::vector<Field> &&fields);
 
 public:
+  ~TableManager();
   static std::shared_ptr<TableManager>
   build(std::shared_ptr<DatabaseManager> par, const std::string &name) {
     return std::shared_ptr<TableManager>(new TableManager(par, name));
+  }
+  static std::shared_ptr<TableManager>
+  build(std::shared_ptr<DatabaseManager> par, const std::string &name,
+        std::vector<Field> &&fields) {
+    return std::shared_ptr<TableManager>(
+        new TableManager(par, name, std::move(fields)));
   }
 
   inline std::string get_name() const noexcept { return table_name; }
 
   void table_meta_read();
+  void table_meta_write();
 };

@@ -120,6 +120,7 @@ uint8_t SequentialAccessor::read_byte() {
 
 void SequentialAccessor::write_byte(uint8_t byte) {
   check_buffer();
+  PagedBuffer::get()->mark_dirty(headptr);
   *cur++ = byte;
 }
 

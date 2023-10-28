@@ -9,7 +9,7 @@ private:
   std::shared_ptr<GlobalManager> global_manager;
 
   std::string current_db{""};
-  db_id_t database_id{0};
+  unified_id_t database_id{0};
   std::shared_ptr<DatabaseManager> db_manager{nullptr};
 
   ScapeFrontend();
@@ -27,7 +27,7 @@ public:
   void execute(const std::string &s);
 
   std::string get_current_db() const noexcept { return current_db; }
-  db_id_t get_current_db_id() const noexcept { return database_id; }
+  unified_id_t get_current_db_id() const noexcept { return database_id; }
   std::shared_ptr<DatabaseManager> get_current_db_manager() const noexcept {
     return db_manager;
   }

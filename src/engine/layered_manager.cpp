@@ -1,3 +1,4 @@
+#include "engine/defs.h"
 #include <engine/layered_manager.h>
 #include <filesystem>
 #include <storage/file_mapping.h>
@@ -38,23 +39,22 @@ void GlobalManager::global_meta_read() {
     // valid signature, read database
     uint32_t db_count = accessor.read<uint32_t>();
     for (size_t i = 0; i < db_count; i++) {
-      db_id_t db_id = accessor.read<db_id_t>();
+      unified_id_t db_id = get_unified_id();
       std::string db_name = accessor.read_str();
-      dbs.insert(std::make_pair(db_id, DatabaseManager::build(db_name)));
+      auto db = DatabaseManager::build(db_name);
+      db->db_meta_read();
+      dbs.insert(std::make_pair(db_id, db));
       name2id.insert(std::make_pair(db_name, db_id));
-      max_db_id = std::max(max_db_id, db_id);
     }
   }
 }
 
 void GlobalManager::global_meta_write() const {
-  assert(fs::is_regular_file(db_global_meta));
   int fd = FileMapping::get()->open_file(db_global_meta);
   SequentialAccessor accessor(fd);
   accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
   accessor.write<uint32_t>(dbs.size());
   for (auto &[id, db] : dbs) {
-    accessor.write<uint32_t>(id);
     accessor.write_str(db->get_name());
   }
 }
@@ -62,7 +62,7 @@ void GlobalManager::global_meta_write() const {
 void GlobalManager::create_db(const std::string &s) {
   if (name2id.contains(s))
     return;
-  db_id_t id = ++max_db_id;
+  unified_id_t id = get_unified_id();
   dbs.insert(std::make_pair(id, DatabaseManager::build(s)));
   name2id.insert(std::make_pair(s, id));
   dirty = true;
@@ -71,14 +71,15 @@ void GlobalManager::create_db(const std::string &s) {
 void GlobalManager::drop_db(const std::string &s) {
   if (!name2id.contains(s))
     return;
+  // TODO: unset dirty to avoid unnecessary write
   fs::remove_all(fs::path(Config::get()->dbs_dir) / s);
-  db_id_t id = name2id[s];
+  unified_id_t id = name2id[s];
   dbs.erase(id);
   name2id.erase(s);
   dirty = true;
 }
 
-db_id_t GlobalManager::get_db_id(const std::string &s) const {
+unified_id_t GlobalManager::get_db_id(const std::string &s) const {
   auto it = name2id.find(s);
   if (it == name2id.end()) {
     return 0;
@@ -92,6 +93,15 @@ DatabaseManager::DatabaseManager(const std::string &name) {
   ensure_directory(db_dir);
   db_meta = fs::path(db_dir) / ".meta";
   ensure_file(db_meta);
+}
+
+DatabaseManager::~DatabaseManager() {
+  if (dirty) {
+    db_meta_write();
+  }
+}
+
+void DatabaseManager::db_meta_read() {
   int fd = FileMapping::get()->open_file(db_meta);
   SequentialAccessor accessor(fd);
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
@@ -101,7 +111,7 @@ DatabaseManager::DatabaseManager(const std::string &name) {
   } else {
     int table_count = accessor.read<uint32_t>();
     for (int i = 0; i < table_count; i++) {
-      tbl_id_t tbl_id = accessor.read<tbl_id_t>();
+      unified_id_t tbl_id = get_unified_id();
       std::string table_name = accessor.read_str();
       auto tbl = TableManager::build(shared_from_this(), table_name);
       tbl->table_meta_read();
@@ -111,9 +121,36 @@ DatabaseManager::DatabaseManager(const std::string &name) {
   }
 }
 
+void DatabaseManager::db_meta_write() {
+  int fd = FileMapping::get()->open_file(db_meta);
+  SequentialAccessor accessor(fd);
+  accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
+  accessor.write<uint32_t>(tables.size());
+  for (auto &[id, tbl] : tables) {
+    accessor.write_str(tbl->get_name());
+  }
+}
+
+unified_id_t DatabaseManager::get_table_id(const std::string &s) const {
+  auto it = name2id.find(s);
+  if (it == name2id.end()) {
+    return 0;
+  }
+  return it->second;
+}
+
+void DatabaseManager::create_table(const std::string &name,
+                                   std::vector<Field> &&fields) {
+  auto tbl = TableManager::build(shared_from_this(), name, std::move(fields));
+  unified_id_t tbl_id = get_unified_id();
+  tables.insert(std::make_pair(tbl_id, tbl));
+  name2id.insert(std::make_pair(name, tbl_id));
+  dirty = true;
+}
+
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
                            const std::string &name)
-    : parent(par), table_name(name) {
+    : parent(par->get_name()), table_name(name) {
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(par->db_dir) / (name + ".meta");
   data_file = fs::path(par->db_dir) / (name + ".dat");
@@ -121,6 +158,19 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
   ensure_file(meta_file);
   ensure_file(data_file);
   ensure_file(index_file);
+}
+
+TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
+                           const std::string &name, std::vector<Field> &&fields)
+    : TableManager(par, name) {
+  fields = std::move(fields);
+  dirty = true;
+}
+
+TableManager::~TableManager() {
+  if (dirty) {
+    table_meta_write();
+  }
 }
 
 void TableManager::table_meta_read() {
@@ -138,4 +188,14 @@ void TableManager::table_meta_read() {
     }
     // TODO: read index metadata
   }
+}
+
+void TableManager::table_meta_write() {
+  SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
+  accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
+  accessor.write<uint32_t>(fields.size());
+  for (const auto &field : fields) {
+    field.serialize(accessor);
+  }
+  // TODO: write index metadata
 }
