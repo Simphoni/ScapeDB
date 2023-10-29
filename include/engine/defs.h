@@ -77,7 +77,7 @@ struct VarcharHolder : public DataTypeHolderBase {
   std::string type_str() override {
     return "VARCHAR(" + std::to_string(mxlen) + ")";
   }
-  std::string val_str() override { return value; }
+  std::string val_str() override { return "'" + value + "'"; }
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };

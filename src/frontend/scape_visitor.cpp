@@ -91,8 +91,9 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   data_meta->has_default_val = false;
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
+    data_meta->has_default_val = true;
     if (!val.has_value()) {
-      // Null
+      data_meta->has_default_val = false;
     } else if (auto x = std::any_cast<int>(&val)) {
       std::dynamic_pointer_cast<IntHolder>(data_meta)->value = *x;
     } else if (auto x = std::any_cast<float>(&val)) {
@@ -112,7 +113,8 @@ std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
   } else if (ctx->Float() != nullptr) {
     return std::stof(ctx->Float()->getText());
   } else if (ctx->String() != nullptr) {
-    return ctx->String()->getText();
+    auto temp = ctx->String()->getText();
+    return temp.substr(1, temp.size() - 2);
   } else {
     return nullptr;
   }

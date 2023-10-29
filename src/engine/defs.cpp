@@ -81,43 +81,48 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
 void IntHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(INT);
   s.write_byte(has_default_val);
-  if (has_default_val)
-    s.write(value);
-  s.write<uint32_t>(value);
+  if (has_default_val) {
+    s.write<uint32_t>(value);
+  }
 }
 
 void IntHolder::deserialize(SequentialAccessor &s) {
   has_default_val = s.read_byte();
-  if (has_default_val)
+  if (has_default_val) {
     value = s.read<uint32_t>();
+  }
 }
 
 void FloatHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(FLOAT);
   s.write_byte(has_default_val);
-  if (has_default_val)
+  if (has_default_val) {
     s.write<uint32_t>(cast_f2i(value));
+  }
 }
 
 void FloatHolder::deserialize(SequentialAccessor &s) {
   has_default_val = s.read_byte();
-  if (has_default_val)
+  if (has_default_val) {
     value = cast_i2f(s.read<uint32_t>());
+  }
 }
 
 void VarcharHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(VARCHAR);
   s.write<uint32_t>(mxlen);
   s.write_byte(has_default_val);
-  if (has_default_val)
+  if (has_default_val) {
     s.write_str(value);
+  }
 }
 
 void VarcharHolder::deserialize(SequentialAccessor &s) {
   mxlen = s.read<uint32_t>();
   has_default_val = s.read_byte();
-  if (has_default_val)
+  if (has_default_val) {
     value = s.read_str();
+  }
 }
 
 std::shared_ptr<KeyTypeHolderBase> KeyTypeHolderBase::build(KeyType type) {
@@ -130,19 +135,21 @@ std::shared_ptr<KeyTypeHolderBase> KeyTypeHolderBase::build(KeyType type) {
 }
 
 void NormalHolder::serealize(SequentialAccessor &s) const {
-  s.write_byte(PRIMARY);
+  s.write_byte(NORMAL);
 }
 
-void NormalHolder::deserialize(SequentialAccessor &s) { type = PRIMARY; }
+void NormalHolder::deserialize(SequentialAccessor &s) {}
 
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
+  s.write_byte(notnull);
   data_meta->serealize(s);
   key_meta->serealize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
+  notnull = s.read_byte();
   data_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
   data_meta->deserialize(s);
   key_meta = KeyTypeHolderBase::build(KeyType(s.read_byte()));
