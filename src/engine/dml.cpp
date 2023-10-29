@@ -102,20 +102,8 @@ void describe_table(const std::string &s) {
     table.push_back(field.field_name);
     table.push_back(field.type_str());
     table.push_back(field.notnull ? "NO" : "YES");
-    if (!std::holds_alternative<std::monostate>(field.default_value)) {
-      switch (field.data_type) {
-      case INT:
-        table.push_back(std::to_string(std::get<int>(field.default_value)));
-        break;
-      case FLOAT:
-        table.push_back(std::to_string(std::get<float>(field.default_value)));
-        break;
-      case VARCHAR:
-        table.push_back(std::get<std::string>(field.default_value));
-        break;
-      default:
-        assert(false);
-      }
+    if (field.data_meta->has_default_val) {
+      table.push_back(field.data_meta->val_str());
     } else {
       table.push_back("NULL");
     }

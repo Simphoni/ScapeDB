@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdint>
 #include <engine/defs.h>
 #include <storage/storage.h>
 #include <variant>
@@ -11,7 +12,7 @@ unified_id_t get_unified_id() {
 uint32_t cast_f2i(float x) { return *reinterpret_cast<uint32_t *>(&x); }
 float cast_i2f(uint32_t x) { return *reinterpret_cast<float *>(&x); }
 
-DataType cast_str2type(const std::string &s) {
+DataType str2keytype(const std::string &s) {
   if (s == "INT") {
     return INT;
   } else if (s == "FLOAT") {
@@ -23,7 +24,7 @@ DataType cast_str2type(const std::string &s) {
   }
 }
 
-std::string type2str(DataType type) {
+std::string datatype2str(DataType type) {
   switch (type) {
   case INT:
     return "INT";
@@ -36,7 +37,7 @@ std::string type2str(DataType type) {
   }
 }
 
-std::string key2str(KeyType type) {
+std::string keytype2str(KeyType type) {
   switch (type) {
   case NORMAL:
     return "NORMAL";
@@ -49,79 +50,103 @@ std::string key2str(KeyType type) {
   }
 }
 
+std::shared_ptr<DataTypeHolderBase>
+DataTypeHolderBase::build(const std::string &s) {
+  if (s == "INT") {
+    return std::make_shared<IntHolder>();
+  } else if (s == "FLOAT") {
+    return std::make_shared<FloatHolder>();
+  } else if (std::string_view(s.data(), 7) == "VARCHAR") {
+    auto ret = std::make_shared<VarcharHolder>();
+    ret->mxlen = std::stoi(std::string(s.begin() + 8, s.end() - 1));
+    return ret;
+  } else {
+    assert(false);
+  }
+}
+
+std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
+  switch (type) {
+  case INT:
+    return std::make_shared<IntHolder>();
+  case FLOAT:
+    return std::make_shared<FloatHolder>();
+  case VARCHAR:
+    return std::make_shared<VarcharHolder>();
+  default:
+    assert(false);
+  }
+}
+
+void IntHolder::serealize(SequentialAccessor &s) const {
+  s.write_byte(INT);
+  s.write_byte(has_default_val);
+  if (has_default_val)
+    s.write(value);
+  s.write<uint32_t>(value);
+}
+
+void IntHolder::deserialize(SequentialAccessor &s) {
+  has_default_val = s.read_byte();
+  if (has_default_val)
+    value = s.read<uint32_t>();
+}
+
+void FloatHolder::serealize(SequentialAccessor &s) const {
+  s.write_byte(FLOAT);
+  s.write_byte(has_default_val);
+  if (has_default_val)
+    s.write<uint32_t>(cast_f2i(value));
+}
+
+void FloatHolder::deserialize(SequentialAccessor &s) {
+  has_default_val = s.read_byte();
+  if (has_default_val)
+    value = cast_i2f(s.read<uint32_t>());
+}
+
+void VarcharHolder::serealize(SequentialAccessor &s) const {
+  s.write_byte(VARCHAR);
+  s.write<uint32_t>(mxlen);
+  s.write_byte(has_default_val);
+  if (has_default_val)
+    s.write_str(value);
+}
+
+void VarcharHolder::deserialize(SequentialAccessor &s) {
+  mxlen = s.read<uint32_t>();
+  has_default_val = s.read_byte();
+  if (has_default_val)
+    value = s.read_str();
+}
+
+std::shared_ptr<KeyTypeHolderBase> KeyTypeHolderBase::build(KeyType type) {
+  switch (type) {
+  case NORMAL:
+    return std::make_shared<NormalHolder>();
+  default:
+    assert(false);
+  }
+}
+
+void NormalHolder::serealize(SequentialAccessor &s) const {
+  s.write_byte(PRIMARY);
+}
+
+void NormalHolder::deserialize(SequentialAccessor &s) { type = PRIMARY; }
+
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
-  s.write_byte(data_type);
-  s.write_byte(key_type);
-  s.write_byte((uint8_t)notnull);
-  s.write<int>(len);
-  bool is_null = std::holds_alternative<std::monostate>(default_value);
-  s.write_byte(!is_null);
-  if (!is_null) {
-    switch (data_type) {
-    case INT:
-      s.write(std::get<int>(default_value));
-      break;
-    case FLOAT:
-      s.write(cast_f2i(std::get<float>(default_value)));
-      break;
-    case VARCHAR:
-      s.write_str(std::get<std::string>(default_value));
-      break;
-    default:
-      assert(false);
-    }
-  }
+  data_meta->serealize(s);
+  key_meta->serealize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
-  data_type = static_cast<DataType>(s.read_byte());
-  assert(data_type == INT || data_type == FLOAT || data_type == VARCHAR);
-  key_type = static_cast<KeyType>(s.read_byte());
-  assert(key_type == NORMAL || key_type == PRIMARY || key_type == FOREIGN);
-  notnull = s.read_byte();
-  len = s.read<int>();
-  if (s.read_byte()) {
-    switch (data_type) {
-    case INT:
-      default_value = s.read<int>();
-      break;
-    case FLOAT:
-      default_value = cast_i2f(s.read<uint32_t>());
-      break;
-    case VARCHAR:
-      default_value = s.read_str();
-      break;
-    default:
-      assert(false);
-    }
-  } else {
-    default_value = std::monostate{};
-  }
+  data_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
+  data_meta->deserialize(s);
+  key_meta = KeyTypeHolderBase::build(KeyType(s.read_byte()));
+  key_meta->deserialize(s);
 }
 
-std::string Field::to_string() const {
-  std::string ret = field_name + "(" + type2str(data_type) + "," + type_str() +
-                    "(" + std::to_string(len) + ")" + ",";
-  if (notnull) {
-    ret += "NOT NULL,";
-  }
-  if (!std::holds_alternative<std::monostate>(default_value)) {
-    switch (data_type) {
-    case INT:
-      ret += std::to_string(std::get<int>(default_value));
-      break;
-    case FLOAT:
-      ret += std::to_string(std::get<float>(default_value));
-      break;
-    case VARCHAR:
-      ret += std::get<std::string>(default_value);
-      break;
-    default:
-      assert(false);
-    }
-  }
-  ret += ")";
-  return ret;
-}
+std::string Field::to_string() const { return "(no impl)"; }

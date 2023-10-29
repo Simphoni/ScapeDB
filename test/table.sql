@@ -7,5 +7,5 @@ SHOW TABLES;
 DESC table1;
 DESC table2;
 DESC table3;
-DROP table1;
+DROP TABLE table1;
 SHOW TABLES;

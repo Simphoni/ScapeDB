@@ -2,6 +2,7 @@
 #include <engine/dml.h>
 #include <engine/layered_manager.h>
 #include <frontend/scape_visitor.h>
+#include <memory>
 #include <storage/storage.h>
 
 std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
@@ -80,30 +81,24 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 }
 
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
-  ctx->type_()->accept(this);
-  DataType dtype = cast_str2type(ctx->type_()->getText());
-  Field field(ctx->Identifier()->getText(), dtype, NORMAL);
-  if (dtype == VARCHAR) {
-    field.len = stoi(ctx->type_()->Integer()->getText());
-  }
-  field.field_id = get_unified_id();
+  Field field(ctx->Identifier()->getText(), get_unified_id());
+  field.data_meta = DataTypeHolderBase::build(ctx->type_()->getText());
+  field.key_meta = KeyTypeHolderBase::build(KeyType::NORMAL);
   if (ctx->Null() != nullptr) {
     field.notnull = true;
   }
-  field.default_value = std::monostate{};
+  auto data_meta = field.data_meta;
+  data_meta->has_default_val = false;
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
     if (!val.has_value()) {
-      field.default_value = std::monostate();
+      // Null
     } else if (auto x = std::any_cast<int>(&val)) {
-      assert(dtype == INT);
-      field.default_value = *x;
+      std::dynamic_pointer_cast<IntHolder>(data_meta)->value = *x;
     } else if (auto x = std::any_cast<float>(&val)) {
-      assert(dtype == FLOAT);
-      field.default_value = *x;
+      std::dynamic_pointer_cast<FloatHolder>(data_meta)->value = *x;
     } else if (auto x = std::any_cast<std::string>(&val)) {
-      assert(dtype == VARCHAR);
-      field.default_value = *x;
+      std::dynamic_pointer_cast<VarcharHolder>(data_meta)->value = *x;
     } else {
       assert(false);
     }
