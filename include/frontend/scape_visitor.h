@@ -1,7 +1,6 @@
 #pragma once
 #include <SQLBaseVisitor.h>
 #include <SQLVisitor.h>
-
 #include <antlr4-runtime.h>
 
 class ScapeVisitor : public SQLBaseVisitor {

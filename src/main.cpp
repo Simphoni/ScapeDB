@@ -1,12 +1,13 @@
-#include <argparse/argparse.hpp>
-#include <engine/dml.h>
-#include <frontend/frontend.h>
-#include <utils/config.h>
-
 #include <csignal>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
+#include <argparse/argparse.hpp>
+
+#include <engine/dml.h>
+#include <frontend/frontend.h>
+#include <utils/config.h>
 
 std::string const prompt = "scapedb";
 

@@ -1,7 +1,8 @@
 #pragma once
-#include <engine/layered_manager.h>
 #include <memory>
 #include <string>
+
+#include <engine/layered_manager.h>
 
 class ScapeFrontend {
 private:

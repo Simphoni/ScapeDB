@@ -1,7 +1,8 @@
 #include <cstring>
+#include <type_traits>
+
 #include <storage/file_mapping.h>
 #include <storage/paged_buffer.h>
-#include <type_traits>
 
 std::shared_ptr<PagedBuffer> PagedBuffer::instance = nullptr;
 

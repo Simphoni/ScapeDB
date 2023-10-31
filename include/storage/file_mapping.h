@@ -1,9 +1,10 @@
 #pragma once
 
 #include <memory>
-#include <storage/defs.h>
 #include <string>
 #include <unordered_map>
+
+#include <storage/defs.h>
 #include <utils/config.h>
 
 class FileMapping {

@@ -2,11 +2,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
+#include <vector>
+
 #include <storage/defs.h>
 #include <storage/file_mapping.h>
-#include <unordered_map>
 #include <utils/config.h>
-#include <vector>
 
 template <> struct std::hash<PageLocator> {
   size_t operator()(const PageLocator &pl) const noexcept {

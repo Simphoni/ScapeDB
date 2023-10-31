@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <storage/defs.h>
 #include <string>
+
+#include <storage/defs.h>
 
 class GlobalManager;
 class DatabaseManager;
