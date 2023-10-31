@@ -28,9 +28,8 @@ void drop_db(const std::string &s) {
 
 void show_dbs() {
   const auto &dbs = GlobalManager::get()->get_dbs();
-  std::vector<std::string> table;
+  std::vector<std::string> table{"DATABASES"};
   table.reserve(dbs.size() + 1);
-  table.emplace_back("DATABASES");
   for (const auto &db : dbs) {
     table.emplace_back(db.second->get_name());
   }
@@ -52,9 +51,8 @@ void show_tables() {
   }
   const auto &tbls =
       ScapeFrontend::get()->get_current_db_manager()->get_tables();
-  std::vector<std::string> table;
+  std::vector<std::string> table{"TABLES"};
   table.reserve(tbls.size() + 1);
-  table.emplace_back("TABLES");
   for (const auto &tbl : tbls) {
     table.emplace_back(tbl.second->get_name());
   }
@@ -62,11 +60,11 @@ void show_tables() {
 }
 
 void create_table(const std::string &s, std::vector<Field> &&fields) {
-  if (ScapeFrontend::get()->get_current_db_id() == 0) {
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
     printf("ERROR: no database selected\n");
     return;
   }
-  auto db = ScapeFrontend::get()->get_current_db_manager();
   if (db->get_table_id(s) != 0) {
     printf("ERROR: table %s already exists\n", s.data());
   } else {
@@ -75,11 +73,11 @@ void create_table(const std::string &s, std::vector<Field> &&fields) {
 }
 
 void drop_table(const std::string &s) {
-  if (ScapeFrontend::get()->get_current_db_id() == 0) {
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
     printf("ERROR: no database selected\n");
     return;
   }
-  auto db = ScapeFrontend::get()->get_current_db_manager();
   if (db->get_table_id(s) == 0) {
     printf("ERROR: table %s does not exist\n", s.data());
   } else {
@@ -89,6 +87,10 @@ void drop_table(const std::string &s) {
 
 void describe_table(const std::string &s) {
   auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
+    return;
+  }
   unified_id_t id = db->get_table_id(s);
   if (id == 0) {
     printf("ERROR: table %s does not exist\n", s.data());

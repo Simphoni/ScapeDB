@@ -1,10 +1,10 @@
 #pragma once
+#include <any>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <storage/defs.h>
 #include <string>
-#include <variant>
 
 class GlobalManager;
 class DatabaseManager;
@@ -22,6 +22,8 @@ enum DataType : uint8_t {
 
 std::string datatype2str(DataType type);
 
+extern bool has_err;
+
 struct DataTypeHolderBase {
   DataType type;
   bool notnull;
@@ -30,6 +32,8 @@ struct DataTypeHolderBase {
   virtual void get_default_val(const std::string &s) = 0;
   virtual std::string type_str() = 0;
   virtual std::string val_str() = 0;
+  virtual int get_size() const = 0;
+  virtual void accept_value(std::any val) = 0;
   virtual void serealize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
 
@@ -47,6 +51,15 @@ struct IntHolder : public DataTypeHolderBase {
   }
   std::string type_str() override { return "INT"; }
   std::string val_str() override { return std::to_string(value); }
+  int get_size() const override { return sizeof(int); }
+  void accept_value(std::any val) override {
+    if (auto x = std::any_cast<int>(&val)) {
+      value = *x;
+    } else {
+      printf("error: type mismatch (should be INT)\n");
+      has_err = true;
+    }
+  }
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
@@ -61,6 +74,15 @@ struct FloatHolder : public DataTypeHolderBase {
   }
   std::string type_str() override { return "FLOAT"; }
   std::string val_str() override { return std::to_string(value); }
+  int get_size() const override { return sizeof(float); }
+  void accept_value(std::any val) override {
+    if (auto x = std::any_cast<float>(&val)) {
+      value = *x;
+    } else {
+      printf("error: type mismatch (should be FLOAT)\n");
+      has_err = true;
+    }
+  }
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
@@ -78,6 +100,15 @@ struct VarcharHolder : public DataTypeHolderBase {
     return "VARCHAR(" + std::to_string(mxlen) + ")";
   }
   std::string val_str() override { return "'" + value + "'"; }
+  int get_size() const override { return mxlen; /*fixed length*/ }
+  void accept_value(std::any val) override {
+    if (auto x = std::any_cast<std::string>(&val)) {
+      value = *x;
+    } else {
+      printf("error: type mismatch (should be VARCHAR)\n");
+      has_err = true;
+    }
+  }
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
@@ -124,4 +155,5 @@ struct Field {
   std::string to_string() const;
 
   std::string type_str() const { return data_meta->type_str(); }
+  inline int get_size() const noexcept { return data_meta->get_size(); }
 };

@@ -141,7 +141,7 @@ template <typename T> T SequentialAccessor::read() {
 
 std::string SequentialAccessor::read_str() {
   // [len: int] [char*]
-  uint32_t len = read<uint32_t>();
+  uint32_t len = read<uint16_t>();
   check_buffer();
   if (cur + len <= tailptr) {
     std::string ret = std::string((char *)cur, len);
@@ -173,7 +173,7 @@ template <typename T> void SequentialAccessor::write(T val) {
 }
 
 void SequentialAccessor::write_str(const std::string &s) {
-  write<uint32_t>(s.length());
+  write<uint16_t>(s.length());
   check_buffer();
   PagedBuffer::get()->mark_dirty(headptr);
   if (cur + s.length() <= tailptr) {
@@ -189,8 +189,6 @@ void SequentialAccessor::write_str(const std::string &s) {
   }
 }
 
-template int SequentialAccessor::read<int>();
 template uint32_t SequentialAccessor::read<uint32_t>();
 
-template void SequentialAccessor::write<int>(int);
 template void SequentialAccessor::write<uint32_t>(uint32_t);

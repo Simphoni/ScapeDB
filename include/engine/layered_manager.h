@@ -88,6 +88,10 @@ private:
   std::unordered_map<std::string, int> name2col;
   bool dirty{false};
 
+  uint32_t entry_len;
+  uint32_t entries_per_page;
+  uint32_t n_entries;
+
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name,
                std::vector<Field> &&fields);

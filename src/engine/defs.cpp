@@ -4,6 +4,8 @@
 #include <storage/storage.h>
 #include <variant>
 
+bool has_err = false;
+
 unified_id_t get_unified_id() {
   static unified_id_t id = 0;
   return ++id;

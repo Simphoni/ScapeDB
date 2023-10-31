@@ -175,9 +175,16 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
 }
 
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
-                           const std::string &name, std::vector<Field> &&fields)
+                           const std::string &name,
+                           std::vector<Field> &&fields_)
     : TableManager(par, name) {
-  this->fields = std::move(fields);
+  fields = std::move(fields_);
+  entry_len = 0;
+  for (size_t i = 0; i < fields.size(); ++i) {
+    name2col.insert(std::make_pair(fields[i].field_name, i));
+    entry_len += fields[i].get_size();
+  }
+  entries_per_page = Config::PAGE_SIZE / entry_len;
   dirty = true;
 }
 
@@ -188,6 +195,7 @@ TableManager::~TableManager() {
 }
 
 void TableManager::table_meta_read() {
+  entry_len = 0;
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
     accessor.reset();
@@ -199,7 +207,10 @@ void TableManager::table_meta_read() {
     for (int i = 0; i < field_count; i++) {
       fields[i].deserialize(accessor);
       name2col.insert(std::make_pair(fields[i].field_name, i));
+      entry_len += fields[i].get_size();
     }
+    n_entries = accessor.read<uint32_t>();
+    entries_per_page = Config::PAGE_SIZE / entry_len;
     // TODO: read index metadata
   }
 }
@@ -211,6 +222,7 @@ void TableManager::table_meta_write() {
   for (const auto &field : fields) {
     field.serialize(accessor);
   }
+  accessor.write<uint32_t>(n_entries);
   // TODO: write index metadata
 }
 

@@ -6,7 +6,10 @@
 #include <frontend/scape_visitor.h>
 
 #include <antlr4-runtime.h>
+#include <chrono>
 #include <string>
+
+namespace ch = std::chrono;
 
 std::shared_ptr<ScapeFrontend> ScapeFrontend::instance = nullptr;
 
@@ -41,7 +44,9 @@ void ScapeFrontend::execute(const std::string &stmt) {
   if (Config::get()->stdin_is_file) {
     std::cout << stmt << std::endl;
   }
+  auto beg = ch::high_resolution_clock::now();
   parse(stmt);
-  if (Config::get()->batch_mode)
-    std::cout << "@" << std::endl;
+  auto end = ch::high_resolution_clock::now();
+  printf("@ time consumed: %.3lf ms\n",
+         ch::duration_cast<ch::microseconds>(end - beg).count() * 1e-3);
 }

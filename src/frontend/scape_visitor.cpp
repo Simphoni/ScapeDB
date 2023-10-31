@@ -1,16 +1,25 @@
-#include <any>
+#include <memory>
+#include <optional>
+
 #include <engine/dml.h>
 #include <engine/layered_manager.h>
 #include <frontend/scape_visitor.h>
-#include <memory>
 #include <storage/storage.h>
+
+template <typename T> std::optional<T> any_get(std::any val) {
+  if (T *x = std::any_cast<T>(&val)) {
+    return *x;
+  } else {
+    return std::nullopt;
+  }
+}
 
 std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
   return visitChildren(ctx);
 }
 
 std::any ScapeVisitor::visitStatement(SQLParser::StatementContext *ctx) {
-  // if we have time, it's possible to add a planner
+  has_err = false;
   return visitChildren(ctx);
 }
 
@@ -46,9 +55,9 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
   std::any fields = ctx->field_list()->accept(this);
   if (auto x = std::any_cast<std::vector<Field>>(&fields)) {
-    DML::create_table(tbl_name, std::move(*x));
-  } else {
-    assert(false);
+    if (!has_err) {
+      DML::create_table(tbl_name, std::move(*x));
+    }
   }
   return tbl_name;
 }
@@ -94,14 +103,8 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
     data_meta->has_default_val = true;
     if (!val.has_value()) {
       data_meta->has_default_val = false;
-    } else if (auto x = std::any_cast<int>(&val)) {
-      std::dynamic_pointer_cast<IntHolder>(data_meta)->value = *x;
-    } else if (auto x = std::any_cast<float>(&val)) {
-      std::dynamic_pointer_cast<FloatHolder>(data_meta)->value = *x;
-    } else if (auto x = std::any_cast<std::string>(&val)) {
-      std::dynamic_pointer_cast<VarcharHolder>(data_meta)->value = *x;
     } else {
-      assert(false);
+      data_meta->accept_value(val);
     }
   }
   return field;
