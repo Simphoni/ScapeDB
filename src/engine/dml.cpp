@@ -1,5 +1,6 @@
 #include <engine/defs.h>
 #include <engine/dml.h>
+#include <engine/field.h>
 #include <frontend/frontend.h>
 #include <utils/logger.h>
 

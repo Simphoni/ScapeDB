@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <engine/defs.h>
+#include <engine/field.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 
@@ -77,7 +78,7 @@ public:
   void purge();
 };
 
-class TableManager : public std::enable_shared_from_this<TableManager> {
+class TableManager {
 private:
   friend class RecordManager;
   std::string table_name;

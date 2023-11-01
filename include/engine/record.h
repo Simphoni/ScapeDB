@@ -69,7 +69,7 @@ private:
 public:
   static const int BITMAP_START_OFFSET = 8;
 
-  RecordManager(std::shared_ptr<TableManager> table);
+  RecordManager(TableManager *table);
   ~RecordManager();
   uint8_t *get_record_ref(int pageid, int slotid);
   std::pair<int, int> insert_record(uint8_t *ptr);

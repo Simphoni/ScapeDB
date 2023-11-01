@@ -1,6 +1,7 @@
 #include "engine/defs.h"
 #include <filesystem>
 
+#include <engine/field.h>
 #include <engine/layered_manager.h>
 #include <engine/record.h>
 #include <storage/storage.h>
@@ -187,7 +188,7 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
     name2col.insert(std::make_pair(fields[i].field_name, i));
     record_len += fields[i].get_size();
   }
-  record_manager = std::make_shared<RecordManager>(shared_from_this());
+  record_manager = std::make_shared<RecordManager>(this);
   dirty = true;
 }
 
@@ -215,7 +216,7 @@ void TableManager::table_meta_read() {
     ptr_available = accessor.read<uint32_t>();
     // TODO: read index metadata
   }
-  record_manager = std::make_shared<RecordManager>(shared_from_this());
+  record_manager = std::make_shared<RecordManager>(this);
 }
 
 void TableManager::table_meta_write() {

@@ -14,7 +14,7 @@ inline int eval_records_per_page(int record_len) {
   return records_per_page;
 }
 
-RecordManager::RecordManager(std::shared_ptr<TableManager> table) {
+RecordManager::RecordManager(TableManager *table) {
   filename = table->data_file;
   record_len = table->record_len;
   n_pages = table->n_pages;
