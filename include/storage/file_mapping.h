@@ -23,6 +23,8 @@ public:
   }
 
   bool create_file(const std::string &file) const;
+  int create_temp_file();
+  void close_temp_file(int);
   int open_file(const std::string &file);
   int get_fd(const std::string &file);
   // closing a file will cause all its buffered pages to be deserted

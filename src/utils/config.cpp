@@ -29,6 +29,9 @@ void Config::parse(argparse::ArgumentParser &parser) {
   }
   ensure_directory(db_data_root);
   db_global_meta = fs::path(db_data_root) / "scape_global.meta";
-  dbs_dir = fs::path(db_data_root); // / "dbs";
+  dbs_dir = fs::path(db_data_root); /// / "dbs";
+  temp_file_dir = fs::path(db_data_root) / ".temp";
+  temp_file_template = fs::path(temp_file_dir) / "fileXXXXXX";
   ensure_directory(dbs_dir);
+  ensure_directory(temp_file_dir);
 }

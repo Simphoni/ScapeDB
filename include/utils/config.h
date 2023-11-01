@@ -2,10 +2,11 @@
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
-#include <argparse/argparse.hpp>
 #include <cassert>
 #include <memory>
 #include <string>
+
+#include <argparse/argparse.hpp>
 
 class DatabaseManager;
 
@@ -29,6 +30,8 @@ public:
   std::string db_data_root;
   std::string db_global_meta{""};
   std::string dbs_dir{""};
+  std::string temp_file_dir{""};
+  std::string temp_file_template{""};
 
   static std::shared_ptr<const Config> get() {
     if (instance == nullptr) {

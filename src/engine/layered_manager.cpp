@@ -201,7 +201,7 @@ void TableManager::table_meta_read() {
   record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    printf("Error: table metadata file %s is invalid.", meta_file.data());
+    printf("error: table metadata file %s is invalid.", meta_file.data());
     std::exit(0);
   } else {
     int field_count = accessor.read<uint32_t>();

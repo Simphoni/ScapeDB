@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <filesystem>
 
 #include <storage/file_mapping.h>
@@ -21,6 +22,24 @@ bool FileMapping::create_file(const std::string &s) const {
   bool ret = f.good();
   f.close();
   return ret;
+}
+
+int FileMapping::create_temp_file() {
+  std::string filename = Config::get()->temp_file_template;
+  int fd = mkstemp(filename.data());
+  assert(fd != -1);
+  fds[filename] = fd;
+  filenames[fd] = filename;
+  return fd;
+}
+
+void FileMapping::close_temp_file(int fd) {
+  assert(filenames.contains(fd));
+  std::string filename = filenames[fd];
+  filenames.erase(fd);
+  fds.erase(filename);
+  close(fd);
+  fs::remove(filename);
 }
 
 int FileMapping::open_file(const std::string &file) {
