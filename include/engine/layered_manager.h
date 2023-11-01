@@ -77,20 +77,30 @@ public:
   void purge();
 };
 
-class TableManager {
+class TableManager : public std::enable_shared_from_this<TableManager> {
 private:
+  friend class RecordManager;
   std::string table_name;
   std::string meta_file, data_file, index_file;
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string parent;
 
+  /// fields is initialized by the following 2 methods:
+  /// - table_meta_read: initialize from persistent storage
+  /// - TableManager: initialize from SQL statement
+  /// record manager is set after fields is initialized
   std::vector<Field> fields;
   std::unordered_map<std::string, int> name2col;
   bool dirty{false};
 
-  uint32_t entry_len;
-  uint32_t entries_per_page;
-  uint32_t n_entries;
+  uint32_t record_len;
+  /// records_per_page is set by record_manager
+  uint32_t records_per_page;
+  uint32_t n_pages;
+  int ptr_available;
+  std::shared_ptr<RecordManager> record_manager;
+
+  std::vector<uint8_t> temp_buf;
 
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name,
@@ -116,4 +126,6 @@ public:
   void table_meta_write();
 
   void purge();
+
+  void insert_record(const std::vector<std::any> &values);
 };

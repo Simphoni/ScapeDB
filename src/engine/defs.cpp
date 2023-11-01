@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 
 #include <engine/defs.h>
 #include <storage/storage.h>
@@ -80,6 +81,38 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
   }
 }
 
+/// Field DataType: INT
+
+void IntHolder::accept_value(std::any val) {
+  if (auto x = std::any_cast<int>(&val)) {
+    value = *x;
+  } else {
+    printf("error: type mismatch (should be INT)\n");
+    has_err = true;
+  }
+}
+
+uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+  comment = 1;
+  if (val.has_value()) {
+    if (int *x = std::any_cast<int>(&val)) {
+      *(int *)ptr = *x;
+    } else {
+      printf("error: type mismatch (should be INT)\n");
+      has_err = true;
+    }
+  } else if (has_default_val) {
+    *(int *)ptr = value;
+  } else {
+    if (notnull) {
+      printf("error: not null constraint\n");
+      has_err = true;
+    }
+    comment = 0;
+  }
+  return ptr + 4;
+}
+
 void IntHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(INT);
   s.write_byte(has_default_val);
@@ -95,6 +128,37 @@ void IntHolder::deserialize(SequentialAccessor &s) {
   }
 }
 
+/// Field DataType: FLOAT
+
+void FloatHolder::accept_value(std::any val) {
+  if (auto x = std::any_cast<float>(&val)) {
+    value = *x;
+  } else {
+    printf("error: type mismatch (should be FLOAT)\n");
+    has_err = true;
+  }
+}
+uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+  comment = 1;
+  if (val.has_value()) {
+    if (float *x = std::any_cast<float>(&val)) {
+      *(float *)ptr = *x;
+    } else {
+      printf("error: type mismatch (should be FLOAT)\n");
+      has_err = true;
+    }
+  } else if (has_default_val) {
+    *(float *)ptr = value;
+  } else {
+    if (notnull) {
+      printf("error: not null constraint\n");
+      has_err = true;
+    }
+    comment = 0;
+  }
+  return ptr + 4;
+}
+
 void FloatHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(FLOAT);
   s.write_byte(has_default_val);
@@ -108,6 +172,38 @@ void FloatHolder::deserialize(SequentialAccessor &s) {
   if (has_default_val) {
     value = cast_i2f(s.read<uint32_t>());
   }
+}
+
+/// Field DataType: VARCHAR
+
+void VarcharHolder::accept_value(std::any val) {
+  if (auto x = std::any_cast<std::string>(&val)) {
+    value = *x;
+  } else {
+    printf("error: type mismatch (should be VARCHAR)\n");
+    has_err = true;
+  }
+}
+
+uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+  comment = 1;
+  if (val.has_value()) {
+    if (std::string *x = std::any_cast<std::string>(&val)) {
+      memcpy(ptr, x->data(), x->length());
+    } else {
+      printf("error: type mismatch (should be FLOAT)\n");
+      has_err = true;
+    }
+  } else if (has_default_val) {
+    memcpy(ptr, value.data(), value.length());
+  } else {
+    if (notnull) {
+      printf("error: not null constraint\n");
+      has_err = true;
+    }
+    comment = 0;
+  }
+  return ptr + mxlen;
 }
 
 void VarcharHolder::serealize(SequentialAccessor &s) const {

@@ -1,6 +1,8 @@
+#include "engine/defs.h"
 #include <filesystem>
 
 #include <engine/layered_manager.h>
+#include <engine/record.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 #include <utils/misc.h>
@@ -180,12 +182,12 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
                            std::vector<Field> &&fields_)
     : TableManager(par, name) {
   fields = std::move(fields_);
-  entry_len = 0;
+  record_len = sizeof(bitmap_t);
   for (size_t i = 0; i < fields.size(); ++i) {
     name2col.insert(std::make_pair(fields[i].field_name, i));
-    entry_len += fields[i].get_size();
+    record_len += fields[i].get_size();
   }
-  entries_per_page = Config::PAGE_SIZE / entry_len;
+  record_manager = std::make_shared<RecordManager>(shared_from_this());
   dirty = true;
 }
 
@@ -196,24 +198,24 @@ TableManager::~TableManager() {
 }
 
 void TableManager::table_meta_read() {
-  entry_len = 0;
+  record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    accessor.reset();
-    accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
-    accessor.write<uint32_t>(0);
+    printf("Error: table metadata file %s is invalid.", meta_file.data());
+    std::exit(0);
   } else {
     int field_count = accessor.read<uint32_t>();
     fields.resize(field_count);
     for (int i = 0; i < field_count; i++) {
       fields[i].deserialize(accessor);
       name2col.insert(std::make_pair(fields[i].field_name, i));
-      entry_len += fields[i].get_size();
+      record_len += fields[i].get_size();
     }
-    n_entries = accessor.read<uint32_t>();
-    entries_per_page = Config::PAGE_SIZE / entry_len;
+    n_pages = accessor.read<uint32_t>();
+    ptr_available = accessor.read<uint32_t>();
     // TODO: read index metadata
   }
+  record_manager = std::make_shared<RecordManager>(shared_from_this());
 }
 
 void TableManager::table_meta_write() {
@@ -223,7 +225,8 @@ void TableManager::table_meta_write() {
   for (const auto &field : fields) {
     field.serialize(accessor);
   }
-  accessor.write<uint32_t>(n_entries);
+  accessor.write<uint32_t>(record_manager->n_pages);
+  accessor.write<uint32_t>(record_manager->ptr_available);
   // TODO: write index metadata
 }
 
@@ -232,4 +235,24 @@ void TableManager::purge() {
   FileMapping::get()->purge(data_file);
   FileMapping::get()->purge(index_file);
   dirty = false;
+}
+
+void TableManager::insert_record(const std::vector<std::any> &values) {
+  temp_buf.resize(record_len);
+  uint8_t *ptr = temp_buf.data();
+  uint8_t *ptr_cur = ptr + sizeof(bitmap_t);
+  bitmap_t bitmap = 0;
+  int has_val = 0;
+  has_err = false;
+  for (size_t i = 0; i < fields.size(); ++i) {
+    ptr_cur = fields[i].data_meta->write_buf(ptr_cur, values[i], has_val);
+    if (has_val) {
+      bitmap |= (1 << i);
+    }
+  }
+  if (has_err) {
+    return;
+  }
+  *(uint16_t *)ptr = bitmap;
+  record_manager->insert_record(ptr);
 }
