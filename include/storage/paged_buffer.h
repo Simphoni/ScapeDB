@@ -77,7 +77,7 @@ private:
 public:
   SequentialAccessor(int fd);
 
-  void reset();
+  void reset(int pagenum_);
 
   uint8_t read_byte();
   template <typename T> T read();
@@ -86,4 +86,5 @@ public:
   void write_byte(uint8_t byte);
   template <typename T> void write(T val);
   void write_str(const std::string &val);
+  int get_pagenum() const noexcept { return pagenum; }
 };

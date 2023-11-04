@@ -4,6 +4,7 @@
 #include <engine/field.h>
 #include <engine/layered_manager.h>
 #include <engine/record.h>
+#include <memory>
 #include <storage/storage.h>
 #include <utils/config.h>
 #include <utils/misc.h>
@@ -29,7 +30,7 @@ void GlobalManager::global_meta_read() {
   int fd = FileMapping::get()->open_file(db_global_meta);
   SequentialAccessor accessor(fd);
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    accessor.reset();
+    accessor.reset(0);
     accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
     accessor.write<uint32_t>(0);
   } else {
@@ -102,7 +103,7 @@ void DatabaseManager::db_meta_read() {
   int fd = FileMapping::get()->open_file(db_meta);
   SequentialAccessor accessor(fd);
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    accessor.reset();
+    accessor.reset(0);
     accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
     accessor.write<uint32_t>(0);
   } else {
@@ -136,6 +137,19 @@ unified_id_t DatabaseManager::get_table_id(const std::string &s) const {
   return it->second;
 }
 
+std::shared_ptr<TableManager>
+DatabaseManager::get_table_manager(const std::string &s) const {
+  auto it = name2id.find(s);
+  if (it == name2id.end()) {
+    return nullptr;
+  }
+  auto it2 = tables.find(it->second);
+  if (it2 == tables.end()) {
+    return nullptr;
+  }
+  return it2->second;
+}
+
 void DatabaseManager::purge() {
   for (auto &[id, tbl] : tables) {
     tbl->purge();
@@ -146,8 +160,8 @@ void DatabaseManager::purge() {
   dirty = false;
 }
 
-void DatabaseManager::create_table(const std::string &name,
-                                   std::vector<Field> &&fields) {
+void DatabaseManager::create_table(
+    const std::string &name, std::vector<std::shared_ptr<Field>> &&fields) {
   auto tbl = TableManager::build(shared_from_this(), name, std::move(fields));
   unified_id_t tbl_id = get_unified_id();
   tables.insert(std::make_pair(tbl_id, tbl));
@@ -180,13 +194,13 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
 
 TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
                            const std::string &name,
-                           std::vector<Field> &&fields_)
+                           std::vector<std::shared_ptr<Field>> &&fields_)
     : TableManager(par, name) {
   fields = std::move(fields_);
   record_len = sizeof(bitmap_t);
   for (size_t i = 0; i < fields.size(); ++i) {
-    name2col.insert(std::make_pair(fields[i].field_name, i));
-    record_len += fields[i].get_size();
+    name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
+    record_len += fields[i]->get_size();
   }
   record_manager = std::make_shared<RecordManager>(this);
   dirty = true;
@@ -198,19 +212,28 @@ TableManager::~TableManager() {
   }
 }
 
+std::shared_ptr<Field> TableManager::get_field(const std::string &s) {
+  auto it = name2col.find(s);
+  if (it == name2col.end()) {
+    return nullptr;
+  }
+  return it->second;
+}
+
 void TableManager::table_meta_read() {
   record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    printf("error: table metadata file %s is invalid.", meta_file.data());
+    printf("ERROR: table metadata file %s is invalid.", meta_file.data());
     std::exit(0);
   } else {
     int field_count = accessor.read<uint32_t>();
     fields.resize(field_count);
     for (int i = 0; i < field_count; i++) {
-      fields[i].deserialize(accessor);
-      name2col.insert(std::make_pair(fields[i].field_name, i));
-      record_len += fields[i].get_size();
+      fields[i] = std::make_shared<Field>();
+      fields[i]->deserialize(accessor);
+      name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
+      record_len += fields[i]->get_size();
     }
     n_pages = accessor.read<uint32_t>();
     ptr_available = accessor.read<uint32_t>();
@@ -224,7 +247,7 @@ void TableManager::table_meta_write() {
   accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
   accessor.write<uint32_t>(fields.size());
   for (const auto &field : fields) {
-    field.serialize(accessor);
+    field->serialize(accessor);
   }
   accessor.write<uint32_t>(record_manager->n_pages);
   accessor.write<uint32_t>(record_manager->ptr_available);
@@ -246,7 +269,19 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
   int has_val = 0;
   has_err = false;
   for (size_t i = 0; i < fields.size(); ++i) {
-    ptr_cur = fields[i].data_meta->write_buf(ptr_cur, values[i], has_val);
+    if (fields[i]->data_meta->type == VARCHAR && values[i].has_value()) {
+      if (auto *x = std::any_cast<std::string>(&values[i])) {
+        if (x->length() > fields[i]->data_meta->get_size()) {
+          printf("ERROR: string too long for field %s\n",
+                 fields[i]->field_name.data());
+          has_err = true;
+          return;
+        }
+      }
+    }
+  }
+  for (size_t i = 0; i < fields.size(); ++i) {
+    ptr_cur = fields[i]->data_meta->write_buf(ptr_cur, values[i], has_val);
     if (has_val) {
       bitmap |= (1 << i);
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "storage/paged_buffer.h"
 #include <map>
 #include <memory>
 #include <string>
@@ -71,9 +72,11 @@ public:
     return tables;
   }
 
-  void create_table(const std::string &name, std::vector<Field> &&fields);
+  void create_table(const std::string &name,
+                    std::vector<std::shared_ptr<Field>> &&fields);
   void drop_table(const std::string &name);
   unified_id_t get_table_id(const std::string &s) const;
+  std::shared_ptr<TableManager> get_table_manager(const std::string &s) const;
 
   void purge();
 };
@@ -90,8 +93,8 @@ private:
   /// - table_meta_read: initialize from persistent storage
   /// - TableManager: initialize from SQL statement
   /// record manager is set after fields is initialized
-  std::vector<Field> fields;
-  std::unordered_map<std::string, int> name2col;
+  std::vector<std::shared_ptr<Field>> fields;
+  std::unordered_map<std::string, std::shared_ptr<Field>> name2col;
   bool dirty{false};
 
   uint32_t record_len;
@@ -105,7 +108,7 @@ private:
 
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
   TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name,
-               std::vector<Field> &&fields);
+               std::vector<std::shared_ptr<Field>> &&fields);
 
 public:
   ~TableManager();
@@ -115,13 +118,16 @@ public:
   }
   static std::shared_ptr<TableManager>
   build(std::shared_ptr<DatabaseManager> par, const std::string &name,
-        std::vector<Field> &&fields) {
+        std::vector<std::shared_ptr<Field>> &&fields) {
     return std::shared_ptr<TableManager>(
         new TableManager(par, name, std::move(fields)));
   }
 
   inline std::string get_name() const noexcept { return table_name; }
-  const std::vector<Field> &get_fields() const noexcept { return fields; }
+  const std::vector<std::shared_ptr<Field>> &get_fields() const noexcept {
+    return fields;
+  }
+  std::shared_ptr<Field> get_field(const std::string &s);
 
   void table_meta_read();
   void table_meta_write();
@@ -129,4 +135,5 @@ public:
   void purge();
 
   void insert_record(const std::vector<std::any> &values);
+  void get_record_ref(int kth, std::shared_ptr<SequentialAccessor> accessor);
 };

@@ -107,9 +107,9 @@ SequentialAccessor::SequentialAccessor(int fd) : fd(fd) {
   tailptr = headptr + Config::PAGE_SIZE;
 }
 
-void SequentialAccessor::reset() {
-  pagenum = 0;
-  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, 0));
+void SequentialAccessor::reset(int pagenum_) {
+  pagenum = pagenum_;
+  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum));
   cur = headptr;
   tailptr = headptr + Config::PAGE_SIZE;
 }

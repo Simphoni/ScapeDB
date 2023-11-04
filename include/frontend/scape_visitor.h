@@ -3,7 +3,12 @@
 #include <SQLVisitor.h>
 #include <antlr4-runtime.h>
 
+#include <engine/layered_manager.h>
+
 class ScapeVisitor : public SQLBaseVisitor {
+private:
+  std::shared_ptr<TableManager> insert_into_table;
+
 public:
   std::any visitProgram(SQLParser::ProgramContext *ctx) override;
 
@@ -25,6 +30,11 @@ public:
 
   std::any visitDescribe_table(SQLParser::Describe_tableContext *ctx) override;
 
+  std::any
+  visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
+
+  std::any visitSelect_table(SQLParser::Select_tableContext *ctx) override;
+
   std::any visitField_list(SQLParser::Field_listContext *ctx) override;
 
   std::any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;
@@ -40,4 +50,12 @@ public:
   }
 
   std::any visitValue(SQLParser::ValueContext *ctx) override;
+
+  std::any visitValue_list(SQLParser::Value_listContext *ctx) override;
+
+  std::any visitSelectors(SQLParser::SelectorsContext *ctx) override;
+
+  std::any visitSelector(SQLParser::SelectorContext *ctx) override;
+
+  std::any visitIdentifiers(SQLParser::IdentifiersContext *ctx) override;
 };

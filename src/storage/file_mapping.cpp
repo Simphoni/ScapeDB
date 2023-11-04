@@ -34,7 +34,9 @@ int FileMapping::create_temp_file() {
 }
 
 void FileMapping::close_temp_file(int fd) {
-  assert(filenames.contains(fd));
+  if (!filenames.contains(fd)) {
+    return;
+  }
   std::string filename = filenames[fd];
   filenames.erase(fd);
   fds.erase(filename);

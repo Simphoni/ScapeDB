@@ -11,7 +11,8 @@ void use_db(const std::string &s);
 void show_tables();
 void show_indexes();
 
-void create_table(const std::string &s, std::vector<Field> &&fields);
+void create_table(const std::string &s,
+                  std::vector<std::shared_ptr<Field>> &&fields);
 void drop_table(const std::string &s);
 void describe_table(const std::string &s);
 

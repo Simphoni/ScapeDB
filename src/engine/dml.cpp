@@ -59,7 +59,8 @@ void show_tables() {
   Logger::tabulate(table, table.size(), 1);
 }
 
-void create_table(const std::string &s, std::vector<Field> &&fields) {
+void create_table(const std::string &s,
+                  std::vector<std::shared_ptr<Field>> &&fields) {
   auto db = ScapeFrontend::get()->get_current_db_manager();
   if (db == nullptr) {
     printf("ERROR: no database selected\n");
@@ -97,15 +98,15 @@ void describe_table(const std::string &s) {
     return;
   }
   auto tbl = db->get_tables().at(id);
-  const std::vector<Field> &fields = tbl->get_fields();
+  const auto &fields = tbl->get_fields();
   std::vector<std::string> table{"Field", "Type", "Null", "Default"};
   table.reserve(fields.size() * 4 + 4);
   for (const auto &field : fields) {
-    table.push_back(field.field_name);
-    table.push_back(field.type_str());
-    table.push_back(field.notnull ? "NO" : "YES");
-    if (field.data_meta->has_default_val) {
-      table.push_back(field.data_meta->val_str());
+    table.push_back(field->field_name);
+    table.push_back(field->type_str());
+    table.push_back(field->notnull ? "NO" : "YES");
+    if (field->data_meta->has_default_val) {
+      table.push_back(field->data_meta->val_str());
     } else {
       table.push_back("NULL");
     }

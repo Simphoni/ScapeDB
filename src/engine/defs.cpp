@@ -46,3 +46,38 @@ std::string keytype2str(KeyType type) {
     assert(false);
   }
 }
+
+std::string aggr2str(Aggregator aggr) {
+  switch (aggr) {
+  case NONE:
+    return "";
+  case COUNT:
+    return "COUNT";
+  case AVG:
+    return "AVG";
+  case MAX:
+    return "MAX";
+  case MIN:
+    return "MIN";
+  case SUM:
+    return "SUM";
+  default:
+    assert(false);
+  }
+}
+
+Aggregator str2aggr(const std::string &str) {
+  if (str == "COUNT") {
+    return COUNT;
+  } else if (str == "AVG") {
+    return AVG;
+  } else if (str == "MAX") {
+    return MAX;
+  } else if (str == "MIN") {
+    return MIN;
+  } else if (str == "SUM") {
+    return SUM;
+  } else {
+    assert(false);
+  }
+}

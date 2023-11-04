@@ -10,3 +10,5 @@ DESC table2;
 DESC table3;
 DROP TABLE table1;
 SHOW TABLES;
+SELECT a, table2.b FROM table2, table3;
+SELECT table2.a, table3.b FROM table2, table3;

@@ -43,7 +43,7 @@ void IntHolder::accept_value(std::any val) {
   if (auto x = std::any_cast<int>(&val)) {
     value = *x;
   } else {
-    printf("error: type mismatch (should be INT)\n");
+    printf("ERROR: type mismatch (should be INT)\n");
     has_err = true;
   }
 }
@@ -54,14 +54,14 @@ uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     if (int *x = std::any_cast<int>(&val)) {
       *(int *)ptr = *x;
     } else {
-      printf("error: type mismatch (should be INT)\n");
+      printf("ERROR: type mismatch (should be INT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
     *(int *)ptr = value;
   } else {
     if (notnull) {
-      printf("error: not null constraint\n");
+      printf("ERROR: not null constraint\n");
       has_err = true;
     }
     comment = 0;
@@ -90,7 +90,7 @@ void FloatHolder::accept_value(std::any val) {
   if (auto x = std::any_cast<float>(&val)) {
     value = *x;
   } else {
-    printf("error: type mismatch (should be FLOAT)\n");
+    printf("ERROR: type mismatch (should be FLOAT)\n");
     has_err = true;
   }
 }
@@ -100,14 +100,14 @@ uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     if (float *x = std::any_cast<float>(&val)) {
       *(float *)ptr = *x;
     } else {
-      printf("error: type mismatch (should be FLOAT)\n");
+      printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
     *(float *)ptr = value;
   } else {
     if (notnull) {
-      printf("error: not null constraint\n");
+      printf("ERROR: not null constraint\n");
       has_err = true;
     }
     comment = 0;
@@ -136,7 +136,7 @@ void VarcharHolder::accept_value(std::any val) {
   if (auto x = std::any_cast<std::string>(&val)) {
     value = *x;
   } else {
-    printf("error: type mismatch (should be VARCHAR)\n");
+    printf("ERROR: type mismatch (should be VARCHAR)\n");
     has_err = true;
   }
 }
@@ -147,14 +147,14 @@ uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     if (std::string *x = std::any_cast<std::string>(&val)) {
       memcpy(ptr, x->data(), x->length());
     } else {
-      printf("error: type mismatch (should be FLOAT)\n");
+      printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
     memcpy(ptr, value.data(), value.length());
   } else {
     if (notnull) {
-      printf("error: not null constraint\n");
+      printf("ERROR: not null constraint\n");
       has_err = true;
     }
     comment = 0;
@@ -210,4 +210,11 @@ void Field::deserialize(SequentialAccessor &s) {
   key_meta->deserialize(s);
 }
 
-std::string Field::to_string() const { return "(no impl)"; }
+std::string Field::to_string() const {
+  std::string ret = field_name + "(" + datatype2str(data_meta->type);
+  if (notnull)
+    ret += " NOT NULL";
+  if (data_meta->has_default_val)
+    ret += " DEFAULT " + data_meta->val_str();
+  return ret + ")";
+}

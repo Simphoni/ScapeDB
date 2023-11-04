@@ -3,16 +3,11 @@
 
 #include <engine/dml.h>
 #include <engine/layered_manager.h>
+#include <engine/query.h>
+#include <frontend/frontend.h>
 #include <frontend/scape_visitor.h>
 #include <storage/storage.h>
-
-template <typename T> std::optional<T> any_get(std::any val) {
-  if (T *x = std::any_cast<T>(&val)) {
-    return *x;
-  } else {
-    return std::nullopt;
-  }
-}
+#include <utils/logger.h>
 
 std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
   return visitChildren(ctx);
@@ -54,7 +49,7 @@ std::any ScapeVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
 std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
   std::any fields = ctx->field_list()->accept(this);
-  if (auto x = std::any_cast<std::vector<Field>>(&fields)) {
+  if (auto x = std::any_cast<std::vector<std::shared_ptr<Field>>>(&fields)) {
     if (!has_err) {
       DML::create_table(tbl_name, std::move(*x));
     }
@@ -75,12 +70,52 @@ ScapeVisitor::visitDescribe_table(SQLParser::Describe_tableContext *ctx) {
   return tbl_name;
 }
 
+std::any
+ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
+  std::string tbl_name = ctx->Identifier()->getText();
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
+    has_err = true;
+    return nullptr;
+  }
+  insert_into_table = db->get_table_manager(tbl_name);
+  if (insert_into_table == nullptr) {
+    printf("ERROR: TABLE %s not found\n", tbl_name.data());
+    has_err = true;
+    return nullptr;
+  }
+  ctx->value_lists()->accept(this);
+  insert_into_table = nullptr;
+  /// reset table data so that (column IN value_list) can be parse correctly
+  return true;
+}
+
+std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
+  auto cols =
+      std::move(std::any_cast<std::vector<std::pair<std::string, Aggregator>>>(
+          ctx->selectors()->accept(this)));
+  auto table_names =
+      std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
+  std::shared_ptr<Selector> sel = std::make_shared<Selector>();
+  std::shared_ptr<DatabaseManager> db =
+      ScapeFrontend::get()->get_current_db_manager();
+  if (!sel->parse_from_query(db, table_names, std::move(cols))) {
+    return nullptr;
+  }
+  std::shared_ptr<PagedResult> res = std::make_shared<PagedResult>();
+  res->selector = sel;
+  res->run();
+  Logger::tabulate(res);
+  return true;
+}
+
 std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
-  std::vector<Field> fields;
+  std::vector<std::shared_ptr<Field>> fields;
   fields.reserve(ctx->field().size());
   for (auto fieldctx : ctx->field()) {
     std::any f = fieldctx->accept(this);
-    if (auto x = std::any_cast<Field>(&f)) {
+    if (auto x = std::any_cast<std::shared_ptr<Field>>(&f)) {
       fields.push_back(*x);
     } else {
       assert(false);
@@ -90,13 +125,14 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 }
 
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
-  Field field(ctx->Identifier()->getText(), get_unified_id());
-  field.data_meta = DataTypeHolderBase::build(ctx->type_()->getText());
-  field.key_meta = KeyTypeHolderBase::build(KeyType::NORMAL);
+  std::shared_ptr<Field> field =
+      std::make_shared<Field>(ctx->Identifier()->getText(), get_unified_id());
+  field->data_meta = DataTypeHolderBase::build(ctx->type_()->getText());
+  field->key_meta = KeyTypeHolderBase::build(KeyType::NORMAL);
   if (ctx->Null() != nullptr) {
-    field.notnull = true;
+    field->notnull = true;
   }
-  auto data_meta = field.data_meta;
+  auto data_meta = field->data_meta;
   data_meta->has_default_val = false;
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
@@ -121,4 +157,51 @@ std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
   } else {
     return nullptr;
   }
+}
+
+std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
+  if (has_err) {
+    return nullptr;
+  }
+  std::vector<std::any> vals;
+  vals.reserve(ctx->value().size());
+  for (auto val : ctx->value()) {
+    vals.push_back(val->accept(this));
+  }
+  if (insert_into_table == nullptr) {
+    return vals;
+  } else {
+    insert_into_table->insert_record(vals);
+    return true;
+  }
+}
+
+std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
+  std::vector<std::pair<std::string, Aggregator>> cols;
+  for (auto sel : ctx->selector()) {
+    auto tmp =
+        std::any_cast<std::pair<std::string, Aggregator>>(sel->accept(this));
+    cols.push_back(std::move(tmp));
+  }
+  return cols;
+}
+
+std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
+  if (ctx->column() == nullptr) {
+    return std::make_pair("", COUNT);
+  }
+  if (ctx->aggregator() != nullptr) {
+    return std::make_pair(ctx->column()->getText(),
+                          str2aggr(ctx->aggregator()->getText()));
+  }
+  return std::make_pair(ctx->column()->getText(), NONE);
+}
+
+std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
+  std::vector<std::string> ret;
+  ret.reserve(ctx->Identifier().size());
+  for (auto id : ctx->Identifier()) {
+    ret.push_back(id->getText());
+  }
+  return ret;
 }
