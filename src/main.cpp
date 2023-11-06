@@ -5,7 +5,7 @@
 
 #include <argparse/argparse.hpp>
 
-#include <engine/dml.h>
+#include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <utils/config.h>
 
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   auto cfg = Config::get();
   auto frontend = ScapeFrontend::get();
   if (cfg->preset_db != "") {
-    DML::use_db(cfg->preset_db);
+    ScapeSQL::use_db(cfg->preset_db);
   }
   capture_keyboard_interrupt();
   std::string _prompt = prompt + "(" + frontend->get_current_db() + ")";

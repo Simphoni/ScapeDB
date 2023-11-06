@@ -1,6 +1,5 @@
 #pragma once
 
-#include "engine/layered_manager.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,12 +22,6 @@ struct Selector {
 };
 
 struct WhereConstraint {};
-
-struct Enclosure {
-  std::vector<std::shared_ptr<WhereConstraint>> edges;
-  std::vector<std::shared_ptr<TableManager>> tables;
-  std::vector<std::shared_ptr<Field>> fields;
-};
 
 struct PagedResult {
   int fd;

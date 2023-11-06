@@ -1,10 +1,10 @@
 #include <engine/defs.h>
-#include <engine/dml.h>
 #include <engine/field.h>
+#include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <utils/logger.h>
 
-namespace DML {
+namespace ScapeSQL {
 
 void create_db(const std::string &s) {
   if (GlobalManager::get()->get_db_id(s) != 0) {
@@ -114,4 +114,4 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
-} // namespace DML
+} // namespace ScapeSQL

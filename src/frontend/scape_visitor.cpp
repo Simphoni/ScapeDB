@@ -1,9 +1,9 @@
 #include <memory>
 #include <optional>
 
-#include <engine/dml.h>
 #include <engine/layered_manager.h>
 #include <engine/query.h>
+#include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <frontend/scape_visitor.h>
 #include <storage/storage.h>
@@ -20,29 +20,29 @@ std::any ScapeVisitor::visitStatement(SQLParser::StatementContext *ctx) {
 
 std::any ScapeVisitor::visitCreate_db(SQLParser::Create_dbContext *ctx) {
   std::string db_name = ctx->Identifier()->getText();
-  DML::create_db(db_name);
+  ScapeSQL::create_db(db_name);
   return db_name;
 }
 
 std::any ScapeVisitor::visitDrop_db(SQLParser::Drop_dbContext *ctx) {
   std::string db_name = ctx->Identifier()->getText();
-  DML::drop_db(db_name);
+  ScapeSQL::drop_db(db_name);
   return db_name;
 }
 
 std::any ScapeVisitor::visitShow_dbs(SQLParser::Show_dbsContext *ctx) {
-  DML::show_dbs();
+  ScapeSQL::show_dbs();
   return true;
 }
 
 std::any ScapeVisitor::visitUse_db(SQLParser::Use_dbContext *ctx) {
   std::string db_name = ctx->Identifier()->getText();
-  DML::use_db(db_name);
+  ScapeSQL::use_db(db_name);
   return db_name;
 }
 
 std::any ScapeVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
-  DML::show_tables();
+  ScapeSQL::show_tables();
   return true;
 }
 
@@ -51,7 +51,7 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   std::any fields = ctx->field_list()->accept(this);
   if (auto x = std::any_cast<std::vector<std::shared_ptr<Field>>>(&fields)) {
     if (!has_err) {
-      DML::create_table(tbl_name, std::move(*x));
+      ScapeSQL::create_table(tbl_name, std::move(*x));
     }
   }
   return tbl_name;
@@ -59,14 +59,14 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
 
 std::any ScapeVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
-  DML::drop_table(tbl_name);
+  ScapeSQL::drop_table(tbl_name);
   return tbl_name;
 }
 
 std::any
 ScapeVisitor::visitDescribe_table(SQLParser::Describe_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
-  DML::describe_table(tbl_name);
+  ScapeSQL::describe_table(tbl_name);
   return tbl_name;
 }
 
