@@ -69,14 +69,3 @@ void RecordManager::erase_record(int pageid, int slotid) {
   }
   bits.unset(slotid);
 }
-
-bool RecordManager::read_n_pages(int &pageid_from, int n,
-                                 std::vector<unified_id_t> &&tables_id_set,
-                                 std::shared_ptr<SequentialAccessor> accessor) {
-  if (pageid_from >= n_pages) {
-    return false;
-  }
-  int init_accessor_page = accessor->get_pagenum();
-  while (accessor->get_pagenum() < init_accessor_page + n) {
-  }
-}

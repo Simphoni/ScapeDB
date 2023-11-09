@@ -114,4 +114,7 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
+void select_query(std::shared_ptr<Selector> &&selector,
+                  std::vector<std::string> &&table_names) {}
+
 } // namespace ScapeSQL

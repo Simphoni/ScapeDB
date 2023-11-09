@@ -24,9 +24,23 @@ include_directories(${CMAKE_SOURCE_DIR}/generated)
 include_directories(${CMAKE_SOURCE_DIR}/3rd_party/argparse-2.9/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-file(GLOB_RECURSE scape_src src/*.cpp)
+file(GLOB_RECURSE scape_src src/engine/*.cpp src/frontend/*.cpp
+     src/storage/*.cpp src/utils/*.cpp)
 
 add_library(sql_parser SHARED ${parser_src})
-add_executable(db ${scape_src})
-target_link_libraries(sql_parser PRIVATE antlr4_shared)
-target_link_libraries(db PRIVATE sql_parser antlr4_shared)
+add_library(scape_engine ${scape_src})
+add_executable(db src/main.cpp)
+target_link_libraries(scape_engine PRIVATE antlr4_shared)
+target_link_libraries(db PRIVATE scape_engine sql_parser)
+
+if(BUILD_TEST)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/3rd_party/googletest)
+  enable_testing()
+  file(GLOB test_src test/*.cpp)
+  foreach(srcfile ${test_src})
+    get_filename_component(testname ${srcfile} NAME_WE)
+    add_executable(${testname} ${srcfile})
+    target_link_libraries(${testname} PRIVATE gtest_main sql_parser
+                                              scape_engine)
+  endforeach(srcfile ${test_src})
+endif()

@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
 #include <engine/defs.h>
 
@@ -71,10 +72,9 @@ public:
 
   RecordManager(TableManager *table);
   ~RecordManager();
+
+  int get_fd() const noexcept { return fd; }
   uint8_t *get_record_ref(int pageid, int slotid);
   std::pair<int, int> insert_record(uint8_t *ptr);
   void erase_record(int pageid, int slotid);
-  bool read_n_pages(int &pageid_from, int n,
-                    std::vector<unified_id_t> &&tables_id_set,
-                    std::shared_ptr<SequentialAccessor> accessor);
 };

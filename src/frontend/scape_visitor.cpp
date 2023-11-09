@@ -103,10 +103,7 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   if (!sel->parse_from_query(db, table_names, std::move(cols))) {
     return nullptr;
   }
-  std::shared_ptr<PagedResult> res = std::make_shared<PagedResult>();
-  res->selector = sel;
-  res->run();
-  Logger::tabulate(res);
+  ScapeSQL::select_query(std::move(sel), std::move(table_names));
   return true;
 }
 
@@ -172,20 +169,20 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
     return vals;
   } else {
     insert_into_table->insert_record(vals);
-    return true;
+    return nullptr;
   }
 }
 
 std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
-  std::vector<std::pair<std::string, Aggregator>> cols;
+  using selector_ret_t = std::pair<std::string, Aggregator>;
+  std::vector<selector_ret_t> cols;
   for (auto sel : ctx->selector()) {
-    auto tmp =
-        std::any_cast<std::pair<std::string, Aggregator>>(sel->accept(this));
-    cols.push_back(std::move(tmp));
+    cols.push_back(std::any_cast<selector_ret_t>(sel->accept(this)));
   }
   return cols;
 }
 
+/// @return: std::pair<std::string, Aggregator>
 std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   if (ctx->column() == nullptr) {
     return std::make_pair("", COUNT);

@@ -34,5 +34,8 @@ struct PagedResult {
 
   PagedResult();
   ~PagedResult();
-  void run();
+};
+
+struct QueryEngine {
+  std::shared_ptr<PagedResult> res;
 };

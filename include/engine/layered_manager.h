@@ -46,7 +46,7 @@ public:
   unified_id_t get_db_id(const std::string &s) const;
 };
 
-class DatabaseManager : public std::enable_shared_from_this<DatabaseManager> {
+class DatabaseManager {
 private:
   friend class TableManager;
   std::shared_ptr<PagedBuffer> paged_buffer;
@@ -106,18 +106,18 @@ private:
 
   std::vector<uint8_t> temp_buf;
 
-  TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name);
-  TableManager(std::shared_ptr<DatabaseManager> par, const std::string &name,
+  TableManager(DatabaseManager *par, const std::string &name);
+  TableManager(DatabaseManager *par, const std::string &name,
                std::vector<std::shared_ptr<Field>> &&fields);
 
 public:
   ~TableManager();
-  static std::shared_ptr<TableManager>
-  build(std::shared_ptr<DatabaseManager> par, const std::string &name) {
+  static std::shared_ptr<TableManager> build(DatabaseManager *par,
+                                             const std::string &name) {
     return std::shared_ptr<TableManager>(new TableManager(par, name));
   }
   static std::shared_ptr<TableManager>
-  build(std::shared_ptr<DatabaseManager> par, const std::string &name,
+  build(DatabaseManager *par, const std::string &name,
         std::vector<std::shared_ptr<Field>> &&fields) {
     return std::shared_ptr<TableManager>(
         new TableManager(par, name, std::move(fields)));

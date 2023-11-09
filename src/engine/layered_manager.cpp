@@ -111,7 +111,7 @@ void DatabaseManager::db_meta_read() {
     for (int i = 0; i < table_count; i++) {
       unified_id_t tbl_id = get_unified_id();
       std::string table_name = accessor.read_str();
-      auto tbl = TableManager::build(shared_from_this(), table_name);
+      auto tbl = TableManager::build(this, table_name);
       tbl->table_meta_read();
       tables.insert(std::make_pair(tbl_id, tbl));
       name2id.insert(std::make_pair(table_name, tbl_id));
@@ -162,7 +162,7 @@ void DatabaseManager::purge() {
 
 void DatabaseManager::create_table(
     const std::string &name, std::vector<std::shared_ptr<Field>> &&fields) {
-  auto tbl = TableManager::build(shared_from_this(), name, std::move(fields));
+  auto tbl = TableManager::build(this, name, std::move(fields));
   unified_id_t tbl_id = get_unified_id();
   tables.insert(std::make_pair(tbl_id, tbl));
   name2id.insert(std::make_pair(name, tbl_id));
@@ -180,8 +180,7 @@ void DatabaseManager::drop_table(const std::string &name) {
   dirty = true;
 }
 
-TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
-                           const std::string &name)
+TableManager::TableManager(DatabaseManager *par, const std::string &name)
     : parent(par->get_name()), table_name(name) {
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(par->db_dir) / (name + ".meta");
@@ -192,8 +191,7 @@ TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
   ensure_file(index_file);
 }
 
-TableManager::TableManager(std::shared_ptr<DatabaseManager> par,
-                           const std::string &name,
+TableManager::TableManager(DatabaseManager *par, const std::string &name,
                            std::vector<std::shared_ptr<Field>> &&fields_)
     : TableManager(par, name) {
   fields = std::move(fields_);

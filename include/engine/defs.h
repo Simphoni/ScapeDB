@@ -25,6 +25,10 @@ struct Selector;
 struct WhereConstraint;
 struct PagedResult;
 
+/// iterator.h
+class Iterator;
+class RecordIterator;
+
 typedef uint32_t unified_id_t;
 typedef uint16_t bitmap_t;
 
@@ -62,3 +66,9 @@ enum Aggregator : uint8_t {
 std::string aggr2str(Aggregator aggr);
 
 Aggregator str2aggr(const std::string &str);
+
+enum IteratorType : uint8_t {
+  RECORD = 1,
+  INDEX,
+  RESULT,
+};

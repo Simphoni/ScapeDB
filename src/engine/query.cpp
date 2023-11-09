@@ -102,5 +102,3 @@ PagedResult::PagedResult() {
 }
 
 PagedResult::~PagedResult() { FileMapping::get()->close_temp_file(fd); }
-
-void PagedResult::run() {}
