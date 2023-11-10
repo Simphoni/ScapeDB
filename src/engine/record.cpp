@@ -1,10 +1,23 @@
-#include <engine/layered_manager.h>
 #include <engine/record.h>
+#include <engine/system_manager.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 
+std::vector<int> FixedBitmap::get_valid_indices() const {
+  std::vector<int> ret;
+  for (int i = 0; i < len; ++i) {
+    uint64_t x = data[i];
+    while (x) {
+      int j = __builtin_ctzll(x);
+      ret.push_back(i * 64 + j);
+      x ^= 1ULL << j;
+    }
+  }
+  return ret;
+}
+
 inline int eval_records_per_page(int record_len) {
-  int bytes = Config::PAGE_SIZE - RecordManager::BITMAP_START_OFFSET;
+  int bytes = Config::PAGE_SIZE - BITMAP_START_OFFSET;
   int records_per_page = bytes * 8 / (record_len * 8 + 1); // according to bits
   while (records_per_page * record_len + (records_per_page + 63) / 64 * 8 >
          bytes) {
@@ -38,7 +51,7 @@ std::pair<int, int> RecordManager::insert_record(uint8_t *ptr) {
     current_page =
         PagedBuffer::get()->read_file(std::make_pair(fd, ptr_available));
     int *header = reinterpret_cast<int *>(current_page);
-    header[0] = -1; // 4 bytes reserved
+    header[0] = -1;
     memset(current_page + BITMAP_START_OFFSET, 0,
            sizeof(uint64_t) * headmask_size);
   } else {
@@ -46,13 +59,15 @@ std::pair<int, int> RecordManager::insert_record(uint8_t *ptr) {
         PagedBuffer::get()->read_file(std::make_pair(fd, ptr_available));
   }
   PagedBuffer::get()->mark_dirty(current_page);
-  FixedBitmap bits(headmask_size,
-                   (uint64_t *)(current_page + BITMAP_START_OFFSET));
+  headmask = std::make_shared<FixedBitmap>(
+      headmask_size, (uint64_t *)(current_page + BITMAP_START_OFFSET));
   int pageid = ptr_available;
-  int slotid = bits.get_and_set_first_zero();
+  int slotid = headmask->get_and_set_first_zero();
   assert(slotid != -1);
-  if (bits.n_ones == records_per_page) {
+  if (headmask->n_ones == records_per_page) {
+    /// remove full page from available list
     ptr_available = *(int *)current_page;
+    *(int *)current_page = -1;
   }
   memcpy(current_page + header_len + slotid * record_len, ptr, record_len);
   return std::make_pair(pageid, slotid);
@@ -61,11 +76,11 @@ std::pair<int, int> RecordManager::insert_record(uint8_t *ptr) {
 void RecordManager::erase_record(int pageid, int slotid) {
   current_page = PagedBuffer::get()->read_file(std::make_pair(fd, pageid));
   PagedBuffer::get()->mark_dirty(current_page);
-  FixedBitmap bits(headmask_size,
-                   (uint64_t *)(current_page + BITMAP_START_OFFSET));
-  if (bits.n_ones == records_per_page) {
+  headmask = std::make_shared<FixedBitmap>(
+      headmask_size, (uint64_t *)(current_page + BITMAP_START_OFFSET));
+  if (headmask->n_ones == records_per_page) {
     *(int *)current_page = ptr_available;
     ptr_available = pageid;
   }
-  bits.unset(slotid);
+  headmask->unset(slotid);
 }

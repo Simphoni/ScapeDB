@@ -6,6 +6,8 @@
 
 #include <engine/defs.h>
 
+const int BITMAP_START_OFFSET = 8;
+
 struct FixedBitmap {
   uint64_t *data{nullptr};
   int len, n_ones;
@@ -43,6 +45,7 @@ struct FixedBitmap {
       data[i / 64] ^= 1ULL << (i & 63);
     }
   }
+  std::vector<int> get_valid_indices() const;
 };
 
 // +---------------------------
@@ -52,6 +55,8 @@ struct FixedBitmap {
 class RecordManager {
 private:
   friend class TableManager;
+  friend class RecordIterator;
+
   std::string filename;
   int fd;
 
@@ -65,11 +70,9 @@ private:
   int ptr_available;
 
   uint8_t *current_page;
-  uint8_t *query_buf;
+  std::shared_ptr<FixedBitmap> headmask;
 
 public:
-  static const int BITMAP_START_OFFSET = 8;
-
   RecordManager(TableManager *table);
   ~RecordManager();
 

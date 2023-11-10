@@ -1,9 +1,9 @@
 #include <memory>
 #include <optional>
 
-#include <engine/layered_manager.h>
 #include <engine/query.h>
 #include <engine/scape_sql.h>
+#include <engine/system_manager.h>
 #include <frontend/frontend.h>
 #include <frontend/scape_visitor.h>
 #include <storage/storage.h>
@@ -48,6 +48,11 @@ std::any ScapeVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
 
 std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
+  if (ctx->field_list() == nullptr) {
+    has_err = true;
+    printf("ERROR: field list missing\n");
+    return nullptr;
+  }
   std::any fields = ctx->field_list()->accept(this);
   if (auto x = std::any_cast<std::vector<std::shared_ptr<Field>>>(&fields)) {
     if (!has_err) {

@@ -4,7 +4,7 @@
 
 #include <storage/defs.h>
 
-/// layered_manager.h
+/// system_manager.h
 class GlobalManager;
 class DatabaseManager;
 class TableManager;
@@ -23,7 +23,7 @@ struct Field;
 /// query.h
 struct Selector;
 struct WhereConstraint;
-struct PagedResult;
+struct QueryPlanner;
 
 /// iterator.h
 class Iterator;
@@ -71,4 +71,14 @@ enum IteratorType : uint8_t {
   RECORD = 1,
   INDEX,
   RESULT,
+};
+
+enum ConstraintType : uint8_t {
+  OP_VALUE = 1,
+  OP_COLUMN,
+  OP_SELECT,
+  IF_NULL,
+  IN_LIST,
+  IN_SELECT,
+  LIKE_STR,
 };

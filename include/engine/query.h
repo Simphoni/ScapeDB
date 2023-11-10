@@ -21,9 +21,17 @@ struct Selector {
   bool to_string();
 };
 
-struct WhereConstraint {};
+struct WhereConstraint {
+  ConstraintType type;
+  std::shared_ptr<Field> field;
+  int column_offset;
 
-struct PagedResult {
+  virtual bool check(bitmap_t nullstate, const uint8_t *record) const {
+    return true;
+  }
+};
+
+struct QueryPlanner {
   int fd;
   std::shared_ptr<SequentialAccessor> accessor;
 
@@ -32,10 +40,6 @@ struct PagedResult {
   std::shared_ptr<Selector> selector;
   std::shared_ptr<WhereConstraint> where;
 
-  PagedResult();
-  ~PagedResult();
-};
-
-struct QueryEngine {
-  std::shared_ptr<PagedResult> res;
+  QueryPlanner();
+  ~QueryPlanner();
 };

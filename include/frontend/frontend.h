@@ -2,7 +2,7 @@
 #include <memory>
 #include <string>
 
-#include <engine/layered_manager.h>
+#include <engine/system_manager.h>
 
 class ScapeFrontend {
 private:

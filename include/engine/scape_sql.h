@@ -1,5 +1,5 @@
 #pragma once
-#include <engine/layered_manager.h>
+#include <engine/defs.h>
 #include <storage/storage.h>
 
 namespace ScapeSQL {
@@ -16,7 +16,7 @@ void create_table(const std::string &s,
 void drop_table(const std::string &s);
 void describe_table(const std::string &s);
 
-void select_query(std::shared_ptr<Selector> &&selector,
-                  std::vector<std::string> &&table_names);
+std::shared_ptr<Iterator> select_query(std::shared_ptr<Selector> &&selector,
+                                       std::vector<std::string> &&table_names);
 
 } // namespace ScapeSQL

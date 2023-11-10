@@ -1,5 +1,9 @@
+#include <set>
+
 #include <engine/defs.h>
 #include <engine/field.h>
+#include <engine/iterator.h>
+#include <engine/query.h>
 #include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <utils/logger.h>
@@ -114,7 +118,21 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
-void select_query(std::shared_ptr<Selector> &&selector,
-                  std::vector<std::string> &&table_names) {}
+std::shared_ptr<Iterator> select_query(std::shared_ptr<Selector> &&selector,
+                                       std::vector<std::string> &&table_names) {
+  /// sort columns by tables
+  std::vector<std::shared_ptr<Iterator>> table_it;
+  std::vector<std::shared_ptr<Field>> result_fields;
+  for (auto it : selector->columns) {
+    result_fields.push_back(it.first);
+  }
+  for (const auto &name : table_names) {
+    auto tbl =
+        ScapeFrontend::get()->get_current_db_manager()->get_table_manager(name);
+    table_it.emplace_back(std::shared_ptr<RecordIterator>(new RecordIterator(
+        tbl->get_record_manager(), {}, tbl->get_fields(), result_fields)));
+  }
+  return nullptr;
+}
 
 } // namespace ScapeSQL

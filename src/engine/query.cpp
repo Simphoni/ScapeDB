@@ -2,8 +2,8 @@
 #include <cassert>
 #include <set>
 
-#include <engine/layered_manager.h>
 #include <engine/query.h>
+#include <engine/system_manager.h>
 #include <storage/storage.h>
 
 bool Selector::parse_from_query(
@@ -96,9 +96,9 @@ bool Selector::parse_from_query(
   return true;
 }
 
-PagedResult::PagedResult() {
+QueryPlanner::QueryPlanner() {
   fd = FileMapping::get()->create_temp_file();
   accessor = std::make_shared<SequentialAccessor>(fd);
 }
 
-PagedResult::~PagedResult() { FileMapping::get()->close_temp_file(fd); }
+QueryPlanner::~QueryPlanner() { FileMapping::get()->close_temp_file(fd); }

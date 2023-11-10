@@ -1,10 +1,10 @@
-#include "engine/defs.h"
 #include <filesystem>
-
-#include <engine/field.h>
-#include <engine/layered_manager.h>
-#include <engine/record.h>
 #include <memory>
+
+#include <engine/defs.h>
+#include <engine/field.h>
+#include <engine/record.h>
+#include <engine/system_manager.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 #include <utils/misc.h>
@@ -216,6 +216,17 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) {
     return nullptr;
   }
   return it->second;
+}
+
+int TableManager::get_field_offset(const std::string &s) {
+  int sum = 0;
+  for (const auto &field : fields) {
+    if (field->field_name == s) {
+      return sum;
+    }
+    sum += field->get_size();
+  }
+  return -1;
 }
 
 void TableManager::table_meta_read() {

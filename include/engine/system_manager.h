@@ -128,12 +128,15 @@ public:
     return fields;
   }
   std::shared_ptr<Field> get_field(const std::string &s);
+  int get_field_offset(const std::string &s);
 
   void table_meta_read();
   void table_meta_write();
 
   void purge();
 
+  std::shared_ptr<RecordManager> get_record_manager() const noexcept {
+    return record_manager;
+  }
   void insert_record(const std::vector<std::any> &values);
-  void get_record_ref(int kth, std::shared_ptr<SequentialAccessor> accessor);
 };
