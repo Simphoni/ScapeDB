@@ -1,9 +1,11 @@
+#include <engine/iterator.h>
+#include <engine/query.h>
 #include <utils/config.h>
 #include <utils/logger.h>
 
 namespace Logger {
 
-// output a human-readable table, no efficiency concern
+// output a human-readable table, without efficiency concern
 void tabulate_interactive(const std::vector<std::string> &content, int nrow,
                           int ncol) {
   std::vector<int> maxlen(ncol, 0);
@@ -48,7 +50,99 @@ void tabulate(const std::vector<std::string> &content, int nrow, int ncol) {
   }
 }
 
-void tabulate(const uint8_t *content, const std::vector<int> &header, int nrow,
-              int ncol) {}
+int fmt_width(std::shared_ptr<Field> f) {
+  switch (f->data_meta->type) {
+  case DataType::INT:
+    return 10;
+  case DataType::FLOAT:
+    return 16 + 3;
+  case DataType::VARCHAR:
+    return f->get_size();
+  default:
+    assert(false);
+  }
+}
+
+void print(int x, int width) { std::cout << std::setw(width) << x; }
+
+void print(float x, int width) {
+  static char buf[50];
+  sprintf(buf, "%.2f", x);
+  int slen = strlen(buf);
+  std::cout << std::string(width - slen, ' ') << buf;
+}
+
+void print(char *p, int width) {
+  int slen = strlen(p);
+  std::cout << std::string(width - slen, ' ') << p;
+}
+
+void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
+  const auto &header = planner->selector->header;
+  const auto &field = planner->selector->columns;
+  int ncol = header.size();
+  int nrow = 0;
+  std::vector<int> maxlen(header.size(), 0);
+  for (int i = 0; i < ncol; i++) {
+    maxlen[i] = std::max(fmt_width(field[i]), (int)header[i].length());
+  }
+  std::string hline = "+";
+  for (int i = 0; i < ncol; i++) {
+    maxlen[i]++;
+    hline += std::string(maxlen[i] + 1, '-') + "+";
+  }
+  auto it = planner->iter;
+  /// make header
+  std::cout << hline << std::endl;
+  std::cout << "|";
+  for (int i = 0; i < ncol; i++) {
+    std::cout << std::setw(maxlen[i]) << header[i] << " |";
+  }
+  std::cout << std::endl << hline << std::endl;
+  /// make content
+  std::vector<uint8_t> record;
+  record.reserve(4096);
+  while (!it->all_end()) {
+    if (it->block_end()) {
+      it->fill_next_block();
+    }
+    if (it->all_end()) {
+      break;
+    }
+    it->get(record);
+    const uint8_t *p = record.data();
+    std::cout << "|";
+    for (int i = 0; i < ncol; i++) {
+      switch (field[i]->data_meta->type) {
+      case DataType::INT:
+        print(*(int *)(p), maxlen[i]);
+        break;
+      case DataType::FLOAT:
+        print(*(float *)(p), maxlen[i]);
+        break;
+      case DataType::VARCHAR:
+        print((char *)(p), maxlen[i]);
+        break;
+      default:
+        assert(false);
+      }
+      std::cout << " |";
+      p += field[i]->get_size();
+    }
+    std::cout << std::endl;
+    ++nrow;
+    it->block_next();
+  }
+  std::cout << hline << std::endl;
+  printf("%d rows in set\n", nrow);
+}
+
+void tabulate(std::shared_ptr<QueryPlanner> planner) {
+  if (!Config::get()->batch_mode) {
+    tabulate_interactive(planner);
+  } else {
+    // tabulate_batch(content, nrow, ncol);
+  }
+}
 
 } // namespace Logger

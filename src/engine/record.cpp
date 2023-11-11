@@ -45,7 +45,7 @@ uint8_t *RecordManager::get_record_ref(int pageid, int slotid) {
   return slice + header_len + slotid * record_len;
 }
 
-std::pair<int, int> RecordManager::insert_record(uint8_t *ptr) {
+std::pair<int, int> RecordManager::insert_record(const uint8_t *ptr) {
   if (ptr_available == -1) {
     ptr_available = n_pages++;
     current_page =

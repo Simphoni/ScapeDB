@@ -82,13 +82,13 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
   if (db == nullptr) {
     printf("ERROR: no database selected\n");
     has_err = true;
-    return nullptr;
+    return std::any();
   }
   insert_into_table = db->get_table_manager(tbl_name);
   if (insert_into_table == nullptr) {
     printf("ERROR: TABLE %s not found\n", tbl_name.data());
     has_err = true;
-    return nullptr;
+    return std::any();
   }
   ctx->value_lists()->accept(this);
   insert_into_table = nullptr;
@@ -96,20 +96,37 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
   return true;
 }
 
+std::any
+ScapeVisitor::visitSelect_table_(SQLParser::Select_table_Context *ctx) {
+  /// select_table_ outputs the data held by Iterator
+  auto ret = ctx->select_table()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto ptr = std::any_cast<std::shared_ptr<QueryPlanner>>(ret);
+  if (!has_err) {
+    Logger::tabulate(ptr);
+  }
+  return true;
+}
+
 std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
-  auto cols =
-      std::move(std::any_cast<std::vector<std::pair<std::string, Aggregator>>>(
+  auto sels =
+      std::move(std::any_cast<
+                std::pair<std::vector<std::string>, std::vector<Aggregator>>>(
           ctx->selectors()->accept(this)));
   auto table_names =
       std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
   std::shared_ptr<Selector> sel = std::make_shared<Selector>();
   std::shared_ptr<DatabaseManager> db =
       ScapeFrontend::get()->get_current_db_manager();
-  if (!sel->parse_from_query(db, table_names, std::move(cols))) {
-    return nullptr;
+  if (!sel->parse_from_query(db, table_names, std::move(sels.first),
+                             std::move(sels.second))) {
+    has_err = true;
+    return std::any();
   }
-  ScapeSQL::select_query(std::move(sel), std::move(table_names));
-  return true;
+  auto planner = ScapeSQL::select_query(std::move(sel));
+  return planner;
 }
 
 std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
@@ -142,7 +159,7 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
     if (!val.has_value()) {
       data_meta->has_default_val = false;
     } else {
-      data_meta->accept_value(val);
+      data_meta->set_default_value(val);
     }
   }
   return field;
@@ -157,13 +174,13 @@ std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
     auto temp = ctx->String()->getText();
     return temp.substr(1, temp.size() - 2);
   } else {
-    return nullptr;
+    return std::any();
   }
 }
 
 std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
   if (has_err) {
-    return nullptr;
+    return std::any();
   }
   std::vector<std::any> vals;
   vals.reserve(ctx->value().size());
@@ -174,17 +191,21 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
     return vals;
   } else {
     insert_into_table->insert_record(vals);
-    return nullptr;
+    return std::any();
   }
 }
 
 std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
   using selector_ret_t = std::pair<std::string, Aggregator>;
-  std::vector<selector_ret_t> cols;
+  std::vector<std::string> cols;
+  std::vector<Aggregator> aggrs;
   for (auto sel : ctx->selector()) {
-    cols.push_back(std::any_cast<selector_ret_t>(sel->accept(this)));
+    selector_ret_t tmp =
+        std::move(std::any_cast<selector_ret_t>(sel->accept(this)));
+    cols.push_back(std::move(tmp.first));
+    aggrs.push_back(tmp.second);
   }
-  return cols;
+  return std::make_pair(std::move(cols), std::move(aggrs));
 }
 
 /// @return: std::pair<std::string, Aggregator>

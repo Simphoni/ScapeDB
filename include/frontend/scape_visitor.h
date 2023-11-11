@@ -3,7 +3,7 @@
 #include <SQLVisitor.h>
 #include <antlr4-runtime.h>
 
-#include <engine/system_manager.h>
+#include <engine/defs.h>
 
 class ScapeVisitor : public SQLBaseVisitor {
 private:
@@ -32,6 +32,9 @@ public:
 
   std::any
   visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
+
+  /// visitSelect_table_ is a wrapper for top-level select-table statement
+  std::any visitSelect_table_(SQLParser::Select_table_Context *ctx) override;
 
   std::any visitSelect_table(SQLParser::Select_tableContext *ctx) override;
 

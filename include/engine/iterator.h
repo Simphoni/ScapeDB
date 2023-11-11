@@ -29,7 +29,7 @@ protected:
   int record_len, record_per_page;
   /// for each field_to, its original offset in the record
   std::vector<std::pair<int, int>> offset_remap;
-  int n_records;
+  int n_records{0};
   int dst_iter{0}, pagenum_dst{0}, slotnum_dst{0};
   uint8_t *current_dst_page;
 
@@ -44,8 +44,11 @@ public:
   void reset_block() { pagenum_dst = slotnum_dst = 0; }
   void block_next();
   bool block_end() const { return dst_iter == n_records; }
-  bool all_end() const { return source_ended; }
+  bool all_end() const { return source_ended && dst_iter == n_records; }
   virtual void get(std::vector<uint8_t> &buf);
+
+  /// fill next block of records into buffer and reset block iter
+  /// @return number of records filled
   virtual int fill_next_block() = 0;
   virtual void reset_all() = 0;
 };
@@ -65,6 +68,7 @@ public:
                  std::vector<std::shared_ptr<WhereConstraint>> &&cons,
                  const std::vector<std::shared_ptr<Field>> &fields_src,
                  const std::vector<std::shared_ptr<Field>> &fields_dst);
+  ~RecordIterator();
   bool get_next_valid();
   void reset_all() override;
   int fill_next_block() override;

@@ -182,6 +182,7 @@ void DatabaseManager::drop_table(const std::string &name) {
 
 TableManager::TableManager(DatabaseManager *par, const std::string &name)
     : parent(par->get_name()), table_name(name) {
+  ptr_available = -1; /// for empty table
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(par->db_dir) / (name + ".meta");
   data_file = fs::path(par->db_dir) / (name + ".dat");
@@ -205,7 +206,8 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
 }
 
 TableManager::~TableManager() {
-  if (dirty) {
+  if (dirty || ptr_available != record_manager->ptr_available ||
+      n_pages != record_manager->n_pages) {
     table_meta_write();
   }
 }
@@ -239,7 +241,7 @@ void TableManager::table_meta_read() {
     int field_count = accessor.read<uint32_t>();
     fields.resize(field_count);
     for (int i = 0; i < field_count; i++) {
-      fields[i] = std::make_shared<Field>();
+      fields[i] = std::make_shared<Field>(get_unified_id());
       fields[i]->deserialize(accessor);
       name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
       record_len += fields[i]->get_size();
@@ -272,31 +274,19 @@ void TableManager::purge() {
 
 void TableManager::insert_record(const std::vector<std::any> &values) {
   temp_buf.resize(record_len);
+  memset(temp_buf.data(), 0, temp_buf.size());
   uint8_t *ptr = temp_buf.data();
   uint8_t *ptr_cur = ptr + sizeof(bitmap_t);
   bitmap_t bitmap = 0;
   int has_val = 0;
-  has_err = false;
-  for (size_t i = 0; i < fields.size(); ++i) {
-    if (fields[i]->data_meta->type == VARCHAR && values[i].has_value()) {
-      if (auto *x = std::any_cast<std::string>(&values[i])) {
-        if (x->length() > fields[i]->data_meta->get_size()) {
-          printf("ERROR: string too long for field %s\n",
-                 fields[i]->field_name.data());
-          has_err = true;
-          return;
-        }
-      }
-    }
-  }
   for (size_t i = 0; i < fields.size(); ++i) {
     ptr_cur = fields[i]->data_meta->write_buf(ptr_cur, values[i], has_val);
     if (has_val) {
       bitmap |= (1 << i);
     }
-  }
-  if (has_err) {
-    return;
+    if (has_err) {
+      return;
+    }
   }
   *(uint16_t *)ptr = bitmap;
   record_manager->insert_record(ptr);

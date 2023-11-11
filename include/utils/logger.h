@@ -11,6 +11,6 @@ namespace Logger {
 
 void tabulate(const std::vector<std::string> &content, int nrow, int ncol);
 
-void tabulate(std::shared_ptr<QueryPlanner> result);
+void tabulate(std::shared_ptr<QueryPlanner> plan);
 
 } // namespace Logger

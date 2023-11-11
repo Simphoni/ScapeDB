@@ -13,11 +13,11 @@ struct DataTypeHolderBase {
   bool notnull;
   bool has_default_val;
 
-  virtual void get_default_val(const std::string &s) = 0;
+  virtual void set_default_value(const std::string &s) = 0;
   virtual std::string type_str() = 0;
   virtual std::string val_str() = 0;
   virtual int get_size() const = 0;
-  virtual void accept_value(std::any val) = 0;
+  virtual void set_default_value(std::any val) = 0;
   virtual uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) = 0;
   virtual void serealize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
@@ -30,14 +30,14 @@ struct IntHolder : public DataTypeHolderBase {
   int value;
 
   IntHolder() { type = INT; }
-  void get_default_val(const std::string &s) override {
+  void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stoi(s);
   }
   std::string type_str() override { return "INT"; }
   std::string val_str() override { return std::to_string(value); }
   int get_size() const override { return sizeof(int); }
-  void accept_value(std::any val) override;
+  void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
@@ -47,14 +47,14 @@ struct FloatHolder : public DataTypeHolderBase {
   float value;
 
   FloatHolder() { type = FLOAT; }
-  void get_default_val(const std::string &s) override {
+  void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stof(s);
   }
   std::string type_str() override { return "FLOAT"; }
   std::string val_str() override { return std::to_string(value); }
   int get_size() const override { return sizeof(float); }
-  void accept_value(std::any val) override;
+  void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
@@ -65,7 +65,7 @@ struct VarcharHolder : public DataTypeHolderBase {
   std::string value;
 
   VarcharHolder() { type = VARCHAR; }
-  void get_default_val(const std::string &s) override {
+  void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = s;
   }
@@ -74,7 +74,7 @@ struct VarcharHolder : public DataTypeHolderBase {
   }
   std::string val_str() override { return "'" + value + "'"; }
   int get_size() const override { return mxlen; /*fixed length*/ }
-  void accept_value(std::any val) override;
+  void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
@@ -104,7 +104,8 @@ struct Field {
   unified_id_t field_id;
 
   // we provide only basic constructors, user can freely modify other members
-  Field() = default;
+  Field() = delete;
+  Field(unified_id_t id) : field_id(id) {}
   Field(const std::string &s, unified_id_t id) : field_name(s), field_id(id) {}
 
   void deserialize(SequentialAccessor &s);

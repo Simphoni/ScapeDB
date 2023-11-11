@@ -119,8 +119,10 @@ public:
   static std::shared_ptr<TableManager>
   build(DatabaseManager *par, const std::string &name,
         std::vector<std::shared_ptr<Field>> &&fields) {
-    return std::shared_ptr<TableManager>(
+    auto ptr = std::shared_ptr<TableManager>(
         new TableManager(par, name, std::move(fields)));
+    ptr->dirty = true;
+    return ptr;
   }
 
   inline std::string get_name() const noexcept { return table_name; }

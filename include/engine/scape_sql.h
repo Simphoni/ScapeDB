@@ -16,7 +16,7 @@ void create_table(const std::string &s,
 void drop_table(const std::string &s);
 void describe_table(const std::string &s);
 
-std::shared_ptr<Iterator> select_query(std::shared_ptr<Selector> &&selector,
-                                       std::vector<std::string> &&table_names);
+std::shared_ptr<QueryPlanner>
+select_query(std::shared_ptr<Selector> &&selector);
 
 } // namespace ScapeSQL

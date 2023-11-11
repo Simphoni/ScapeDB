@@ -1,3 +1,4 @@
+#include "engine/defs.h"
 #include "storage/paged_buffer.h"
 #include <cassert>
 #include <set>
@@ -6,10 +7,10 @@
 #include <engine/system_manager.h>
 #include <storage/storage.h>
 
-bool Selector::parse_from_query(
-    std::shared_ptr<DatabaseManager> db,
-    const std::vector<std::string> &table_names,
-    std::vector<std::pair<std::string, Aggregator>> &&cols) {
+bool Selector::parse_from_query(std::shared_ptr<DatabaseManager> db,
+                                const std::vector<std::string> &table_names,
+                                std::vector<std::string> &&cols,
+                                std::vector<Aggregator> &&aggrs_) {
   if (db == nullptr) {
     printf("ERROR: no database selected\n");
     has_err = true;
@@ -31,74 +32,79 @@ bool Selector::parse_from_query(
     is_all = true;
     for (auto table : tables) {
       for (auto field : table->get_fields()) {
-        columns.emplace_back(field, NONE);
-        header.emplace_back(field->field_name);
+        columns.push_back(field);
+        aggrs.push_back(Aggregator::NONE);
+        header.push_back(field->field_name);
       }
     }
     return true;
   }
-  for (auto col : cols) {
-    if (col.second != NONE) {
+  for (int i = 0; i < cols.size(); i++) {
+    const std::string &col = cols[i];
+    Aggregator aggr = aggrs_[i];
+    if (aggr != NONE) {
       has_aggregate = true;
     }
     /// generate header for display, also formats selector
-    if (col.first == "") {
-      columns.emplace_back(nullptr, col.second);
-      header.emplace_back("COUNT(*)");
+    if (col == "") {
+      columns.push_back(nullptr);
+      aggrs.push_back(Aggregator::COUNT);
+      header.push_back("COUNT(*)");
       continue;
     }
-    if (col.second == NONE) {
-      header.emplace_back(col.first);
+    if (aggr == NONE) {
+      header.push_back(col);
     } else {
-      header.emplace_back(aggr2str(col.second) + "(" + col.first + ")");
+      header.push_back(aggr2str(aggr) + "(" + col + ")");
     }
-    const std::string &f = col.first;
-    if (f.find('.') == std::string::npos) {
+    if (col.find('.') == std::string::npos) {
       int num = 0;
       for (auto table : tables) {
-        num += (table->get_field(f) != nullptr);
+        num += (table->get_field(col) != nullptr);
       }
-      if (num > 0) {
-        printf("ERROR: ambiguous column name %s\n", f.data());
+      if (num > 1) {
+        printf("ERROR: ambiguous column name %s\n", col.data());
         has_err = true;
         return false;
       } else if (num == 0) {
-        printf("ERROR: COLUMN %s not found\n", f.data());
+        printf("ERROR: COLUMN %s not found\n", col.data());
         has_err = true;
         return false;
       }
       for (auto table : tables) {
-        auto field = table->get_field(f);
+        auto field = table->get_field(col);
         if (field != nullptr) {
-          columns.push_back(std::make_pair(field, col.second));
+          columns.push_back(field);
+          aggrs.push_back(aggr);
           break;
         }
       }
     } else {
-      int dot = f.find('.');
-      std::string tab_name = f.substr(0, dot);
-      std::string col_name = f.substr(dot + 1);
+      int dot = col.find('.');
+      std::string tab_name = col.substr(0, dot);
+      std::string col_name = col.substr(dot + 1);
       auto table = db->get_table_manager(tab_name);
       if (table == nullptr || !tables_name_set.contains(tab_name)) {
-        printf("ERROR: cannot locate %s\n", f.data());
+        printf("ERROR: cannot locate %s\n", col.data());
         has_err = true;
         return false;
       }
       auto field = table->get_field(col_name);
       if (field == nullptr) {
-        printf("ERROR: COLUMN %s not found\n", f.data());
+        printf("ERROR: COLUMN %s not found\n", col.data());
         has_err = true;
         return false;
       }
-      columns.push_back(std::make_pair(field, col.second));
+      columns.push_back(field);
+      aggrs.push_back(aggr);
     }
   }
   return true;
 }
 
-QueryPlanner::QueryPlanner() {
-  fd = FileMapping::get()->create_temp_file();
-  accessor = std::make_shared<SequentialAccessor>(fd);
+void QueryPlanner::generate_plan() {
+  if (direct_iterators.size() == 1) {
+    iter = direct_iterators[0];
+    return;
+  }
 }
-
-QueryPlanner::~QueryPlanner() { FileMapping::get()->close_temp_file(fd); }

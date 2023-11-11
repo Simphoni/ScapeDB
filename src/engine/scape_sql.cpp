@@ -118,21 +118,19 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
-std::shared_ptr<Iterator> select_query(std::shared_ptr<Selector> &&selector,
-                                       std::vector<std::string> &&table_names) {
+std::shared_ptr<QueryPlanner>
+select_query(std::shared_ptr<Selector> &&selector) {
   /// sort columns by tables
   std::vector<std::shared_ptr<Iterator>> table_it;
-  std::vector<std::shared_ptr<Field>> result_fields;
-  for (auto it : selector->columns) {
-    result_fields.push_back(it.first);
+  std::shared_ptr<QueryPlanner> planner = std::make_shared<QueryPlanner>();
+  for (const auto &tbl : selector->tables) {
+    planner->direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
+        new RecordIterator(tbl->get_record_manager(), {}, tbl->get_fields(),
+                           selector->columns)));
   }
-  for (const auto &name : table_names) {
-    auto tbl =
-        ScapeFrontend::get()->get_current_db_manager()->get_table_manager(name);
-    table_it.emplace_back(std::shared_ptr<RecordIterator>(new RecordIterator(
-        tbl->get_record_manager(), {}, tbl->get_fields(), result_fields)));
-  }
-  return nullptr;
+  planner->selector = std::move(selector);
+  planner->generate_plan();
+  return planner;
 }
 
 } // namespace ScapeSQL

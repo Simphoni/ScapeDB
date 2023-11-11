@@ -39,7 +39,7 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
 
 /// Field DataType: INT
 
-void IntHolder::accept_value(std::any val) {
+void IntHolder::set_default_value(std::any val) {
   if (auto x = std::any_cast<int>(&val)) {
     value = *x;
   } else {
@@ -86,7 +86,7 @@ void IntHolder::deserialize(SequentialAccessor &s) {
 
 /// Field DataType: FLOAT
 
-void FloatHolder::accept_value(std::any val) {
+void FloatHolder::set_default_value(std::any val) {
   if (auto x = std::any_cast<float>(&val)) {
     value = *x;
   } else {
@@ -132,7 +132,7 @@ void FloatHolder::deserialize(SequentialAccessor &s) {
 
 /// Field DataType: VARCHAR
 
-void VarcharHolder::accept_value(std::any val) {
+void VarcharHolder::set_default_value(std::any val) {
   if (auto x = std::any_cast<std::string>(&val)) {
     value = *x;
   } else {
@@ -143,11 +143,18 @@ void VarcharHolder::accept_value(std::any val) {
 
 uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
+  memset(ptr, 0, mxlen);
   if (val.has_value()) {
     if (std::string *x = std::any_cast<std::string>(&val)) {
-      memcpy(ptr, x->data(), x->length());
+      if (x->length() > mxlen) {
+        printf("ERROR: string length exceeds limit (%lu > %d)\n", x->length(),
+               mxlen);
+        has_err = true;
+      } else {
+        memcpy(ptr, x->data(), x->length());
+      }
     } else {
-      printf("ERROR: type mismatch (should be FLOAT)\n");
+      printf("ERROR: type mismatch (should be VARCHAR)\n");
       has_err = true;
     }
   } else if (has_default_val) {

@@ -1,5 +1,3 @@
-#include "engine/defs.h"
-#include "storage/paged_buffer.h"
 #include <engine/field.h>
 #include <engine/iterator.h>
 #include <engine/query.h>
@@ -35,6 +33,11 @@ RecordIterator::RecordIterator(
   fields_src = fields_src_;
   fd_src = record_manager->fd;
   fd_dst = FileMapping::get()->create_temp_file();
+  pagenum_dst = slotnum_dst = 0;
+  pagenum_src = -1;
+  slotnum_src = 0;
+  source_ended = false;
+  it = valid_records.begin();
 
   std::map<unified_id_t, int> offset_map_src;
   int offset_it = 0;
@@ -55,6 +58,10 @@ RecordIterator::RecordIterator(
   record_per_page = Config::PAGE_SIZE / record_len;
 }
 
+RecordIterator::~RecordIterator() {
+  FileMapping::get()->close_temp_file(fd_dst);
+}
+
 bool RecordIterator::get_next_valid() {
   if (it == valid_records.end()) {
     pagenum_src++;
@@ -66,13 +73,11 @@ bool RecordIterator::get_next_valid() {
       if (bits.n_ones > 0) {
         valid_records = bits.get_valid_indices();
         it = valid_records.begin();
-        if (it != valid_records.end()) {
-          slotnum_src = *it;
-          return true;
-        }
-        pagenum_src++;
-        break;
+        slotnum_src = *it;
+        it++;
+        return true;
       }
+      pagenum_src++;
     }
     source_ended = true;
     return false;
@@ -84,9 +89,10 @@ bool RecordIterator::get_next_valid() {
 }
 
 int RecordIterator::fill_next_block() {
+  n_records = 0;
+  pagenum_dst = slotnum_dst = 0;
   if (source_ended)
     return 0;
-  n_records = 0;
 
   for (int i = 0; i < record_per_page * QUERY_MAX_PAGES; ++i) {
     const uint8_t *p;

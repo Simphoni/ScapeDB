@@ -71,6 +71,7 @@ enum IteratorType : uint8_t {
   RECORD = 1,
   INDEX,
   RESULT,
+  REORDER,
 };
 
 enum ConstraintType : uint8_t {

@@ -12,12 +12,14 @@ struct Selector {
   bool is_all;
   bool has_aggregate;
   std::vector<std::string> header;
-  std::vector<std::pair<std::shared_ptr<Field>, Aggregator>> columns;
+  std::vector<std::shared_ptr<Field>> columns;
+  std::vector<Aggregator> aggrs;
   std::vector<std::shared_ptr<TableManager>> tables;
 
   bool parse_from_query(std::shared_ptr<DatabaseManager> db,
                         const std::vector<std::string> &table_names,
-                        std::vector<std::pair<std::string, Aggregator>> &&cols);
+                        std::vector<std::string> &&cols,
+                        std::vector<Aggregator> &&aggrs);
   bool to_string();
 };
 
@@ -32,14 +34,10 @@ struct WhereConstraint {
 };
 
 struct QueryPlanner {
-  int fd;
-  std::shared_ptr<SequentialAccessor> accessor;
-
-  int n_pages;
-  int n_rows;
   std::shared_ptr<Selector> selector;
   std::shared_ptr<WhereConstraint> where;
+  std::vector<std::shared_ptr<Iterator>> direct_iterators;
+  std::shared_ptr<Iterator> iter{nullptr};
 
-  QueryPlanner();
-  ~QueryPlanner();
+  void generate_plan();
 };
