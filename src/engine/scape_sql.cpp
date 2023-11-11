@@ -118,19 +118,4 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
-std::shared_ptr<QueryPlanner>
-select_query(std::shared_ptr<Selector> &&selector) {
-  /// sort columns by tables
-  std::vector<std::shared_ptr<Iterator>> table_it;
-  std::shared_ptr<QueryPlanner> planner = std::make_shared<QueryPlanner>();
-  for (const auto &tbl : selector->tables) {
-    planner->direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
-        new RecordIterator(tbl->get_record_manager(), {}, tbl->get_fields(),
-                           selector->columns)));
-  }
-  planner->selector = std::move(selector);
-  planner->generate_plan();
-  return planner;
-}
-
 } // namespace ScapeSQL

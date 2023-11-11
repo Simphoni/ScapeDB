@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,23 +10,28 @@
 #include <storage/defs.h>
 
 struct Selector {
-  bool is_all;
-  bool has_aggregate;
   std::vector<std::string> header;
   std::vector<std::shared_ptr<Field>> columns;
   std::vector<Aggregator> aggrs;
-  std::vector<std::shared_ptr<TableManager>> tables;
+  bool has_aggregate;
 
-  bool parse_from_query(std::shared_ptr<DatabaseManager> db,
-                        const std::vector<std::string> &table_names,
-                        std::vector<std::string> &&cols,
-                        std::vector<Aggregator> &&aggrs);
-  bool to_string();
+  Selector(std::vector<std::string> &&header,
+           std::vector<std::shared_ptr<Field>> &&columns,
+           std::vector<Aggregator> &&aggrs)
+      : header(std::move(header)), columns(std::move(columns)),
+        aggrs(std::move(aggrs)) {
+    for (auto aggr : aggrs) {
+      if (aggr != Aggregator::NONE) {
+        has_aggregate = true;
+        break;
+      }
+    }
+  }
 };
 
 struct WhereConstraint {
-  ConstraintType type;
   std::shared_ptr<Field> field;
+  ConstraintType type;
   int column_offset;
 
   virtual bool check(bitmap_t nullstate, const uint8_t *record) const {
@@ -33,9 +39,20 @@ struct WhereConstraint {
   }
 };
 
+struct ColumnOpValueConstraint : public WhereConstraint {
+  Operator op;
+  DataType type;
+  std::function<bool(bitmap_t, const uint8_t *)> cmp;
+
+  bool check(bitmap_t nullstate, const uint8_t *record) const override;
+};
+
 struct QueryPlanner {
+  std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
   std::shared_ptr<WhereConstraint> where;
+
+  /// engine
   std::vector<std::shared_ptr<Iterator>> direct_iterators;
   std::shared_ptr<Iterator> iter{nullptr};
 

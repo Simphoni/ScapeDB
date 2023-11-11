@@ -83,3 +83,12 @@ enum ConstraintType : uint8_t {
   IN_SELECT,
   LIKE_STR,
 };
+
+enum Operator : uint8_t {
+  EQ = 1,
+  NE,
+  LT,
+  GT,
+  LE,
+  GE,
+};

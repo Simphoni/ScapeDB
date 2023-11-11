@@ -1,13 +1,19 @@
 #pragma once
-#include <SQLBaseVisitor.h>
-#include <SQLVisitor.h>
+
+#include <memory>
+#include <vector>
+
 #include <antlr4-runtime.h>
 
+#include <SQLBaseVisitor.h>
+#include <SQLVisitor.h>
 #include <engine/defs.h>
 
 class ScapeVisitor : public SQLBaseVisitor {
 private:
   std::shared_ptr<TableManager> insert_into_table;
+  /// for UPDATE, DELETE, SELECT, help parse where clause
+  std::vector<std::vector<std::shared_ptr<TableManager>>> tables_stack;
 
 public:
   std::any visitProgram(SQLParser::ProgramContext *ctx) override;

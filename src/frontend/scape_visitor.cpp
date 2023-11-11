@@ -1,5 +1,6 @@
+#include "engine/defs.h"
 #include <memory>
-#include <optional>
+#include <tuple>
 
 #include <engine/query.h>
 #include <engine/scape_sql.h>
@@ -111,21 +112,36 @@ ScapeVisitor::visitSelect_table_(SQLParser::Select_table_Context *ctx) {
 }
 
 std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
-  auto sels =
-      std::move(std::any_cast<
-                std::pair<std::vector<std::string>, std::vector<Aggregator>>>(
-          ctx->selectors()->accept(this)));
+  /// gather table managers
   auto table_names =
       std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
-  std::shared_ptr<Selector> sel = std::make_shared<Selector>();
   std::shared_ptr<DatabaseManager> db =
       ScapeFrontend::get()->get_current_db_manager();
-  if (!sel->parse_from_query(db, table_names, std::move(sels.first),
-                             std::move(sels.second))) {
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
     has_err = true;
     return std::any();
   }
-  auto planner = ScapeSQL::select_query(std::move(sel));
+  std::vector<std::shared_ptr<TableManager>> selected_tables;
+  for (auto tab_name : table_names) {
+    auto table = db->get_table_manager(tab_name);
+    if (table == nullptr) {
+      printf("ERROR: table %s not found\n", tab_name.data());
+      has_err = true;
+      return false;
+    }
+    selected_tables.push_back(table);
+  }
+  tables_stack.push_back(std::move(selected_tables));
+
+  std::any ret = std::move(ctx->selectors()->accept(this));
+  auto selector = std::move(std::any_cast<std::shared_ptr<Selector>>(ret));
+
+  auto planner = std::make_shared<QueryPlanner>();
+  planner->selector = std::move(selector);
+  planner->tables = std::move(tables_stack.back());
+  planner->generate_plan();
+  tables_stack.pop_back();
   return planner;
 }
 
@@ -196,28 +212,85 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
 }
 
 std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
-  using selector_ret_t = std::pair<std::string, Aggregator>;
-  std::vector<std::string> cols;
+  using selector_ret_t =
+      std::tuple<std::string, std::shared_ptr<Field>, Aggregator>;
+  std::vector<std::string> header;
+  std::vector<std::shared_ptr<Field>> fields;
   std::vector<Aggregator> aggrs;
+  /// perform a gathering operation, like transpose
   for (auto sel : ctx->selector()) {
-    selector_ret_t tmp =
-        std::move(std::any_cast<selector_ret_t>(sel->accept(this)));
-    cols.push_back(std::move(tmp.first));
-    aggrs.push_back(tmp.second);
+    auto ret = std::move(sel->accept(this));
+    if (!ret.has_value()) {
+      return std::any();
+    }
+    selector_ret_t tmp = std::move(std::any_cast<selector_ret_t>(ret));
+    header.push_back(std::move(std::get<0>(tmp)));
+    fields.push_back(std::move(std::get<1>(tmp)));
+    aggrs.push_back(std::move(std::get<2>(tmp)));
   }
-  return std::make_pair(std::move(cols), std::move(aggrs));
+  if (fields.size() == 0) {
+    header.clear();
+    fields.clear();
+    aggrs.clear();
+    for (auto table : tables_stack.back()) {
+      for (auto field : table->get_fields()) {
+        header.push_back(field->field_name);
+        fields.push_back(field);
+        aggrs.push_back(Aggregator::NONE);
+      }
+    }
+  }
+  return std::shared_ptr<Selector>(
+      new Selector(std::move(header), std::move(fields), std::move(aggrs)));
 }
 
-/// @return: std::pair<std::string, Aggregator>
+/// @return: (caption, field, aggregator)
 std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
-  if (ctx->column() == nullptr) {
-    return std::make_pair("", COUNT);
-  }
+  Aggregator aggr = Aggregator::NONE;
   if (ctx->aggregator() != nullptr) {
-    return std::make_pair(ctx->column()->getText(),
-                          str2aggr(ctx->aggregator()->getText()));
+    aggr = str2aggr(ctx->aggregator()->getText());
   }
-  return std::make_pair(ctx->column()->getText(), NONE);
+  std::string col = std::move(ctx->column()->getText());
+  int dot = col.find('.');
+  const auto &selected_tables = tables_stack.back();
+  if (dot == std::string::npos) {
+    int num = 0;
+    for (auto table : selected_tables) {
+      num += (table->get_field(col) != nullptr);
+    }
+    if (num > 1) {
+      printf("ERROR: ambiguous column name %s\n", col.data());
+      has_err = true;
+      return std::any();
+    } else if (num == 0) {
+      printf("ERROR: column %s not found\n", col.data());
+      has_err = true;
+      return std::any();
+    }
+    for (auto table : selected_tables) {
+      auto tmp = table->get_field(col);
+      if (tmp != nullptr) {
+        return std::make_tuple(std::move(ctx->getText()), tmp, aggr);
+      }
+    }
+  } else {
+    std::string tab_name = col.substr(0, dot);
+    std::string col_name = col.substr(dot + 1);
+    for (auto table : selected_tables) {
+      if (table->get_name() == tab_name) {
+        auto field = table->get_field(col_name);
+        if (field == nullptr) {
+          printf("ERROR: cannot find column for %s\n", col.data());
+          has_err = true;
+          return std::any();
+        }
+        return std::make_tuple(std::move(ctx->getText()), field, aggr);
+      }
+    }
+    printf("ERROR: cannot find table for %s\n", col.data());
+  }
+  has_err = true;
+  return std::any();
 }
 
 std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
