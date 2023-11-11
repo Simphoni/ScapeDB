@@ -137,11 +137,55 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
   printf("%d rows in set\n", nrow);
 }
 
+void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
+  const auto &header = planner->selector->header;
+  const auto &field = planner->selector->columns;
+  int ncol = header.size();
+  int nrow = 0;
+  auto it = planner->iter;
+  /// make header
+  for (int i = 0; i < ncol; i++) {
+    printf("%s%c", header[i].data(), i == ncol - 1 ? '\n' : ',');
+  }
+  /// make content
+  std::vector<uint8_t> record;
+  record.reserve(4096);
+  while (!it->all_end()) {
+    if (it->block_end()) {
+      it->fill_next_block();
+    }
+    if (it->all_end()) {
+      break;
+    }
+    it->get(record);
+    const uint8_t *p = record.data();
+    for (int i = 0; i < ncol; i++) {
+      switch (field[i]->data_meta->type) {
+      case DataType::INT:
+        printf("%d", *(int *)(p));
+        break;
+      case DataType::FLOAT:
+        printf("%.2f", *(float *)(p));
+        break;
+      case DataType::VARCHAR:
+        printf("%s", (char *)(p));
+        break;
+      default:
+        assert(false);
+      }
+      putchar(i == ncol - 1 ? '\n' : ',');
+      p += field[i]->get_size();
+    }
+    ++nrow;
+    it->block_next();
+  }
+}
+
 void tabulate(std::shared_ptr<QueryPlanner> planner) {
   if (!Config::get()->batch_mode) {
     tabulate_interactive(planner);
   } else {
-    // tabulate_batch(content, nrow, ncol);
+    tabulate_batch(planner);
   }
 }
 

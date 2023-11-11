@@ -12,7 +12,7 @@ class DatabaseManager;
 
 class Config {
 private:
-  Config();
+  Config() = default;
   Config(const Config &) = delete;
   static std::shared_ptr<Config> instance;
 

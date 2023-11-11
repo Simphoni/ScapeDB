@@ -6,8 +6,6 @@ namespace fs = std::filesystem;
 
 std::shared_ptr<Config> Config::instance = nullptr;
 
-Config::Config() { db_data_root = fs::current_path() / "data"; }
-
 void Config::parse(argparse::ArgumentParser &parser) {
   if (parser.is_used("--init")) {
     fs::remove_all(db_data_root);

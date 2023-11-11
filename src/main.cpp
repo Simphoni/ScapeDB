@@ -1,4 +1,5 @@
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -42,6 +43,8 @@ int main(int argc, char **argv) {
     std::cerr << parser;
     std::exit(1);
   }
+  Config::get_mut()->db_data_root =
+      std::filesystem::canonical(argv[0]).parent_path() / "data";
   Config::get_mut()->parse(parser);
   auto cfg = Config::get();
   auto frontend = ScapeFrontend::get();
