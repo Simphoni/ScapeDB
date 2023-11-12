@@ -87,18 +87,23 @@ void IntHolder::deserialize(SequentialAccessor &s) {
 /// Field DataType: FLOAT
 
 void FloatHolder::set_default_value(std::any val) {
-  if (auto x = std::any_cast<float>(&val)) {
-    value = *x;
+  if (val.type() == typeid(float)) {
+    value = std::any_cast<float>(std::move(val));
+  } else if (val.type() == typeid(int)) {
+    value = std::any_cast<int>(std::move(val));
   } else {
     printf("ERROR: type mismatch (should be FLOAT)\n");
     has_err = true;
   }
 }
+
 uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
-    if (float *x = std::any_cast<float>(&val)) {
-      *(float *)ptr = *x;
+    if (val.type() == typeid(float)) {
+      *(float *)ptr = std::any_cast<float>(std::move(val));
+    } else if (val.type() == typeid(int)) {
+      *(float *)ptr = std::any_cast<int>(std::move(val));
     } else {
       printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
@@ -143,7 +148,7 @@ void VarcharHolder::set_default_value(std::any val) {
 
 uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
-  memset(ptr, 0, mxlen);
+  memset(ptr, 0, mxlen + 1);
   if (val.has_value()) {
     if (std::string *x = std::any_cast<std::string>(&val)) {
       if (x->length() > mxlen) {
@@ -166,7 +171,7 @@ uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     }
     comment = 0;
   }
-  return ptr + mxlen;
+  return ptr + mxlen + 1;
 }
 
 void VarcharHolder::serealize(SequentialAccessor &s) const {

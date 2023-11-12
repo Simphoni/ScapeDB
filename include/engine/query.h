@@ -30,27 +30,27 @@ struct Selector {
 };
 
 struct WhereConstraint {
-  std::shared_ptr<Field> field;
+  int table_id;
   ConstraintType type;
-  int column_offset;
 
   virtual bool check(bitmap_t nullstate, const uint8_t *record) const {
     return true;
   }
+  virtual bool live_in(int table_id_) { return table_id == table_id_; }
 };
 
 struct ColumnOpValueConstraint : public WhereConstraint {
-  Operator op;
-  DataType type;
-  std::function<bool(bitmap_t, const uint8_t *)> cmp;
+  std::function<bool(bitmap_t, const char *)> cmp;
 
+  ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
+                          std::any val);
   bool check(bitmap_t nullstate, const uint8_t *record) const override;
 };
 
 struct QueryPlanner {
   std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
-  std::shared_ptr<WhereConstraint> where;
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
 
   /// engine
   std::vector<std::shared_ptr<Iterator>> direct_iterators;

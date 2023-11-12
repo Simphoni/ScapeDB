@@ -73,7 +73,7 @@ struct VarcharHolder : public DataTypeHolderBase {
     return "VARCHAR(" + std::to_string(mxlen) + ")";
   }
   std::string val_str() override { return "'" + value + "'"; }
-  int get_size() const override { return mxlen; /*fixed length*/ }
+  int get_size() const override { return mxlen + 1; /*fixed length*/ }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serealize(SequentialAccessor &s) const override;
@@ -101,7 +101,8 @@ struct Field {
   std::shared_ptr<DataTypeHolderBase> data_meta;
   std::shared_ptr<KeyTypeHolderBase> key_meta;
   bool notnull;
-  unified_id_t field_id;
+  unified_id_t field_id, table_id;
+  int pers_index, pers_offset;
 
   // we provide only basic constructors, user can freely modify other members
   Field() = delete;

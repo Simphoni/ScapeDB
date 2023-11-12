@@ -67,4 +67,14 @@ public:
   std::any visitSelector(SQLParser::SelectorContext *ctx) override;
 
   std::any visitIdentifiers(SQLParser::IdentifiersContext *ctx) override;
+
+  std::any visitColumn(SQLParser::ColumnContext *ctx) override;
+
+  // where clauses
+
+  std::any
+  visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) override;
+
+  std::any visitWhere_operator_expression(
+      SQLParser::Where_operator_expressionContext *ctx) override;
 };

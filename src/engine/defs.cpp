@@ -47,25 +47,6 @@ std::string keytype2str(KeyType type) {
   }
 }
 
-std::string aggr2str(Aggregator aggr) {
-  switch (aggr) {
-  case NONE:
-    return "";
-  case COUNT:
-    return "COUNT";
-  case AVG:
-    return "AVG";
-  case MAX:
-    return "MAX";
-  case MIN:
-    return "MIN";
-  case SUM:
-    return "SUM";
-  default:
-    assert(false);
-  }
-}
-
 Aggregator str2aggr(const std::string &str) {
   if (str == "COUNT") {
     return COUNT;
@@ -77,6 +58,24 @@ Aggregator str2aggr(const std::string &str) {
     return MIN;
   } else if (str == "SUM") {
     return SUM;
+  } else {
+    assert(false);
+  }
+}
+
+Operator str2op(const std::string &s) {
+  if (s == "=") {
+    return EQ;
+  } else if (s == "<>") {
+    return NE;
+  } else if (s == "<") {
+    return LT;
+  } else if (s == ">") {
+    return GT;
+  } else if (s == "<=") {
+    return LE;
+  } else if (s == ">=") {
+    return GE;
   } else {
     assert(false);
   }

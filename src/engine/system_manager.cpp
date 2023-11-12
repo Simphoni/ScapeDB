@@ -111,7 +111,7 @@ void DatabaseManager::db_meta_read() {
     for (int i = 0; i < table_count; i++) {
       unified_id_t tbl_id = get_unified_id();
       std::string table_name = accessor.read_str();
-      auto tbl = TableManager::build(this, table_name);
+      auto tbl = TableManager::build(this, table_name, tbl_id);
       tbl->table_meta_read();
       tables.insert(std::make_pair(tbl_id, tbl));
       name2id.insert(std::make_pair(table_name, tbl_id));
@@ -162,10 +162,10 @@ void DatabaseManager::purge() {
 
 void DatabaseManager::create_table(
     const std::string &name, std::vector<std::shared_ptr<Field>> &&fields) {
-  auto tbl = TableManager::build(this, name, std::move(fields));
-  unified_id_t tbl_id = get_unified_id();
-  tables.insert(std::make_pair(tbl_id, tbl));
-  name2id.insert(std::make_pair(name, tbl_id));
+  unified_id_t id = get_unified_id();
+  auto tbl = TableManager::build(this, name, id, std::move(fields));
+  tables.insert(std::make_pair(id, tbl));
+  name2id.insert(std::make_pair(name, id));
   dirty = true;
 }
 
@@ -180,8 +180,9 @@ void DatabaseManager::drop_table(const std::string &name) {
   dirty = true;
 }
 
-TableManager::TableManager(DatabaseManager *par, const std::string &name)
-    : parent(par->get_name()), table_name(name) {
+TableManager::TableManager(DatabaseManager *par, const std::string &name,
+                           unified_id_t id)
+    : parent(par->get_name()), table_name(name), table_id(id) {
   ptr_available = -1; /// for empty table
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(par->db_dir) / (name + ".meta");
@@ -193,14 +194,19 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name)
 }
 
 TableManager::TableManager(DatabaseManager *par, const std::string &name,
+                           unified_id_t id,
                            std::vector<std::shared_ptr<Field>> &&fields_)
-    : TableManager(par, name) {
+    : TableManager(par, name, id) {
   fields = std::move(fields_);
-  record_len = sizeof(bitmap_t);
+  record_len = 0;
   for (size_t i = 0; i < fields.size(); ++i) {
     name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
+    fields[i]->pers_index = i;
+    fields[i]->pers_offset = record_len;
+    fields[i]->table_id = table_id;
     record_len += fields[i]->get_size();
   }
+  record_len += sizeof(bitmap_t);
   record_manager = std::make_shared<RecordManager>(this);
   dirty = true;
 }
@@ -220,19 +226,8 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) {
   return it->second;
 }
 
-int TableManager::get_field_offset(const std::string &s) {
-  int sum = 0;
-  for (const auto &field : fields) {
-    if (field->field_name == s) {
-      return sum;
-    }
-    sum += field->get_size();
-  }
-  return -1;
-}
-
 void TableManager::table_meta_read() {
-  record_len = sizeof(bitmap_t);
+  record_len = 0;
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
     printf("ERROR: table metadata file %s is invalid.", meta_file.data());
@@ -243,6 +238,9 @@ void TableManager::table_meta_read() {
     for (int i = 0; i < field_count; i++) {
       fields[i] = std::make_shared<Field>(get_unified_id());
       fields[i]->deserialize(accessor);
+      fields[i]->pers_index = i;
+      fields[i]->pers_offset = record_len;
+      fields[i]->table_id = table_id;
       name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
       record_len += fields[i]->get_size();
     }
@@ -250,6 +248,7 @@ void TableManager::table_meta_read() {
     ptr_available = accessor.read<uint32_t>();
     // TODO: read index metadata
   }
+  record_len += sizeof(bitmap_t);
   record_manager = std::make_shared<RecordManager>(this);
 }
 

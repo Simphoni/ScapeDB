@@ -65,7 +65,7 @@ public:
   /// @param cons consists only of self-related constraints
   /// @param fields_dst will be filtered with fields_src
   RecordIterator(std::shared_ptr<RecordManager> rec,
-                 std::vector<std::shared_ptr<WhereConstraint>> &&cons,
+                 const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                  const std::vector<std::shared_ptr<Field>> &fields_src,
                  const std::vector<std::shared_ptr<Field>> &fields_dst);
   ~RecordIterator();

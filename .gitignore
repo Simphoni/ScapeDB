@@ -9,3 +9,6 @@ runtime/
 
 .devcontainer/
 dbs-testcase/
+
+# official tests
+test/stdtest/

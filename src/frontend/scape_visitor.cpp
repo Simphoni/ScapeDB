@@ -134,12 +134,26 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   }
   tables_stack.push_back(std::move(selected_tables));
 
-  std::any ret = std::move(ctx->selectors()->accept(this));
-  auto selector = std::move(std::any_cast<std::shared_ptr<Selector>>(ret));
+  std::any ret_sel = std::move(ctx->selectors()->accept(this));
+  if (!ret_sel.has_value()) {
+    return std::any();
+  }
+  auto selector = std::move(std::any_cast<std::shared_ptr<Selector>>(ret_sel));
+
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
+  if (ctx->where_and_clause() != nullptr) {
+    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    if (!ret_cons.has_value()) {
+      return std::any();
+    }
+    constraints = std::move(
+        std::any_cast<std::vector<std::shared_ptr<WhereConstraint>>>(ret_cons));
+  }
 
   auto planner = std::make_shared<QueryPlanner>();
   planner->selector = std::move(selector);
   planner->tables = std::move(tables_stack.back());
+  planner->constraints = std::move(constraints);
   planner->generate_plan();
   tables_stack.pop_back();
   return planner;
@@ -250,7 +264,25 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   if (ctx->aggregator() != nullptr) {
     aggr = str2aggr(ctx->aggregator()->getText());
   }
-  std::string col = std::move(ctx->column()->getText());
+  auto ret = std::move(ctx->column()->accept(this));
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(ret);
+  return std::make_tuple(ctx->column()->getText(), field, aggr);
+}
+
+std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
+  std::vector<std::string> ret;
+  ret.reserve(ctx->Identifier().size());
+  for (auto id : ctx->Identifier()) {
+    ret.push_back(id->getText());
+  }
+  return ret;
+}
+
+std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
+  std::string col = std::move(ctx->getText());
   int dot = col.find('.');
   const auto &selected_tables = tables_stack.back();
   if (dot == std::string::npos) {
@@ -270,7 +302,7 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
     for (auto table : selected_tables) {
       auto tmp = table->get_field(col);
       if (tmp != nullptr) {
-        return std::make_tuple(std::move(ctx->getText()), tmp, aggr);
+        return tmp;
       }
     }
   } else {
@@ -284,7 +316,7 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
           has_err = true;
           return std::any();
         }
-        return std::make_tuple(std::move(ctx->getText()), field, aggr);
+        return field;
       }
     }
     printf("ERROR: cannot find table for %s\n", col.data());
@@ -293,11 +325,39 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   return std::any();
 }
 
-std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
-  std::vector<std::string> ret;
-  ret.reserve(ctx->Identifier().size());
-  for (auto id : ctx->Identifier()) {
-    ret.push_back(id->getText());
+std::any
+ScapeVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) {
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
+  for (auto cons : ctx->where_clause()) {
+    auto ret = std::move(cons->accept(this));
+    if (!ret.has_value()) {
+      return std::any();
+    }
+    auto constraint = std::any_cast<std::shared_ptr<WhereConstraint>>(ret);
+    constraints.emplace_back(constraint);
   }
-  return ret;
+  return constraints;
+}
+
+std::any ScapeVisitor::visitWhere_operator_expression(
+    SQLParser::Where_operator_expressionContext *ctx) {
+  Operator op = str2op(ctx->operator_()->getText());
+  auto ret = std::move(ctx->column()->accept(this));
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(ret);
+  /// OP_VALUE and OP_COLUMN result in different constraints
+  auto expr = ctx->expression();
+  if (expr == nullptr) {
+    has_err = true;
+    return std::any();
+  }
+  if (expr->value() != nullptr) {
+    return std::shared_ptr<WhereConstraint>(
+        new ColumnOpValueConstraint(field, op, expr->value()->accept(this)));
+  } else if (expr->column() != nullptr) {
+  }
+  has_err = true;
+  return std::any();
 }

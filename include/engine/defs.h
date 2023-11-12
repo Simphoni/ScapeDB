@@ -63,8 +63,6 @@ enum Aggregator : uint8_t {
   SUM,
 };
 
-std::string aggr2str(Aggregator aggr);
-
 Aggregator str2aggr(const std::string &str);
 
 enum IteratorType : uint8_t {
@@ -92,3 +90,5 @@ enum Operator : uint8_t {
   LE,
   GE,
 };
+
+Operator str2op(const std::string &s);

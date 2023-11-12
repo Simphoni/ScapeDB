@@ -1,3 +1,5 @@
+#include <set>
+
 #include <engine/field.h>
 #include <engine/iterator.h>
 #include <engine/query.h>
@@ -24,12 +26,11 @@ void Iterator::get(std::vector<uint8_t> &buf) {
 }
 
 RecordIterator::RecordIterator(
-    std::shared_ptr<RecordManager> rec,
-    std::vector<std::shared_ptr<WhereConstraint>> &&cons,
+    std::shared_ptr<RecordManager> rec_,
+    const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
     const std::vector<std::shared_ptr<Field>> &fields_dst_) {
-  record_manager = rec;
-  constraints = std::move(cons);
+  record_manager = rec_;
   fields_src = fields_src_;
   fd_src = record_manager->fd;
   fd_dst = FileMapping::get()->create_temp_file();
@@ -39,20 +40,23 @@ RecordIterator::RecordIterator(
   source_ended = false;
   it = valid_records.begin();
 
-  std::map<unified_id_t, int> offset_map_src;
-  int offset_it = 0;
+  for (auto constraint : cons_) {
+    if (constraint->live_in(fields_src_[0]->table_id)) {
+      constraints.push_back(constraint);
+    }
+  }
+
+  std::set<unified_id_t> field_ids_src;
   for (auto &field : fields_src) {
-    offset_map_src[field->field_id] = offset_it;
-    offset_it += field->get_size();
+    field_ids_src.insert(field->field_id);
   }
   record_len = 0;
   for (auto field : fields_dst_) {
-    if (!offset_map_src.contains(field->field_id)) {
+    if (!field_ids_src.contains(field->field_id)) {
       continue;
     }
     fields_dst.push_back(field);
-    offset_remap.emplace_back(offset_map_src[field->field_id],
-                              field->get_size());
+    offset_remap.emplace_back(field->pers_offset, field->get_size());
     record_len += field->get_size();
   }
   record_per_page = Config::PAGE_SIZE / record_len;

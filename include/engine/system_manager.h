@@ -104,23 +104,25 @@ private:
   int ptr_available;
   std::shared_ptr<RecordManager> record_manager;
 
+  int table_id;
+
   std::vector<uint8_t> temp_buf;
 
-  TableManager(DatabaseManager *par, const std::string &name);
-  TableManager(DatabaseManager *par, const std::string &name,
+  TableManager(DatabaseManager *par, const std::string &name, unified_id_t id);
+  TableManager(DatabaseManager *par, const std::string &name, unified_id_t id,
                std::vector<std::shared_ptr<Field>> &&fields);
 
 public:
   ~TableManager();
-  static std::shared_ptr<TableManager> build(DatabaseManager *par,
-                                             const std::string &name) {
-    return std::shared_ptr<TableManager>(new TableManager(par, name));
+  static std::shared_ptr<TableManager>
+  build(DatabaseManager *par, const std::string &name, unified_id_t id) {
+    return std::shared_ptr<TableManager>(new TableManager(par, name, id));
   }
   static std::shared_ptr<TableManager>
-  build(DatabaseManager *par, const std::string &name,
+  build(DatabaseManager *par, const std::string &name, unified_id_t id,
         std::vector<std::shared_ptr<Field>> &&fields) {
     auto ptr = std::shared_ptr<TableManager>(
-        new TableManager(par, name, std::move(fields)));
+        new TableManager(par, name, id, std::move(fields)));
     ptr->dirty = true;
     return ptr;
   }
@@ -130,7 +132,6 @@ public:
     return fields;
   }
   std::shared_ptr<Field> get_field(const std::string &s);
-  int get_field_offset(const std::string &s);
 
   void table_meta_read();
   void table_meta_write();
