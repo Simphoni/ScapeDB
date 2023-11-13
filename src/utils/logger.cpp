@@ -1,3 +1,6 @@
+#include <cctype>
+#include <limits>
+
 #include <engine/iterator.h>
 #include <engine/query.h>
 #include <utils/config.h>
@@ -65,9 +68,72 @@ int fmt_width(std::shared_ptr<Field> f) {
 
 void print(int x, int width) { std::cout << std::setw(width) << x; }
 
-void print(float x, int width) {
+/// a naive workaround to simulate MySQL behavior
+static constexpr int kSingleDigit = std::numeric_limits<float>::digits10;
+char *singleToStrTrimmed(float x) {
   static char buf[50];
-  sprintf(buf, "%.2f", x);
+  int sgn = 1;
+  if (x < 0) {
+    sgn = -1;
+    x = -x;
+  }
+  sprintf(buf, "%.4lf", (double)x);
+  int slen = strlen(buf);
+  std::reverse(buf, buf + slen);
+  int it = slen - 1, counter = 0;
+  while (it >= 0) {
+    if (buf[it] == '.') {
+      --it;
+      continue;
+    }
+    if (counter >= kSingleDigit) {
+      buf[it] = '0';
+    } else {
+      ++counter;
+      if (counter == kSingleDigit) {
+        /// current buffer is xxxx.xxxx
+        int lower_val = 0;
+        if (it == 0) {
+          break;
+        } else if (it < 4 || it >= 6) {
+          lower_val = buf[it - 1] - '0';
+        } else { /// it == 5
+          lower_val = buf[3] - '0';
+        }
+        if (lower_val >= 5) {
+          buf[it]++;
+        }
+      }
+    }
+    it--;
+  }
+  for (int i = 0; i < slen; ++i) {
+    if (buf[i] == '.' || std::isdigit(buf[i])) {
+      continue;
+    }
+    assert(buf[i] == '9' + 1);
+    buf[i] = '0';
+    int nxt = (i == 3 ? 5 : i + 1);
+    buf[nxt] = buf[nxt] + 1;
+  }
+  if (buf[slen - 1] == '9' + 1) {
+    buf[slen - 1] = '0';
+    buf[slen] = '1';
+    buf[slen + 1] = '\0';
+    ++slen;
+  }
+  if (sgn == -1) {
+    buf[slen] = '-';
+    buf[slen + 1] = '\0';
+    ++slen;
+  }
+  std::reverse(buf, buf + slen);
+  buf[slen - 2] = '\0';
+  return buf;
+}
+
+void print(float x, int width) {
+  char *buf = singleToStrTrimmed(x);
   int slen = strlen(buf);
   std::cout << std::string(width - slen, ' ') << buf;
 }
@@ -165,7 +231,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
         printf("%d", *(int *)(p));
         break;
       case DataType::FLOAT:
-        printf("%.2f", *(float *)(p));
+        printf("%s", singleToStrTrimmed(*(float *)(p)));
         break;
       case DataType::VARCHAR:
         printf("%s", (char *)(p));
