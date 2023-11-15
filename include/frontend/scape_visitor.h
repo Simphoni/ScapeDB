@@ -13,6 +13,7 @@ class ScapeVisitor : public SQLBaseVisitor {
 private:
   std::shared_ptr<TableManager> insert_into_table;
   /// for UPDATE, DELETE, SELECT, help parse where clause
+  /// used by set_clause, where_and_clause, selector
   std::vector<std::vector<std::shared_ptr<TableManager>>> tables_stack;
 
 public:
@@ -39,6 +40,8 @@ public:
   std::any
   visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
 
+  std::any visitUpdate_table(SQLParser::Update_tableContext *ctx) override;
+
   /// visitSelect_table_ is a wrapper for top-level select-table statement
   std::any visitSelect_table_(SQLParser::Select_table_Context *ctx) override;
 
@@ -61,6 +64,8 @@ public:
   std::any visitValue(SQLParser::ValueContext *ctx) override;
 
   std::any visitValue_list(SQLParser::Value_listContext *ctx) override;
+
+  std::any visitSet_clause(SQLParser::Set_clauseContext *ctx) override;
 
   std::any visitSelectors(SQLParser::SelectorsContext *ctx) override;
 

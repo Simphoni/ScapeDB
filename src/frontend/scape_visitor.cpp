@@ -15,7 +15,10 @@ std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
 }
 
 std::any ScapeVisitor::visitStatement(SQLParser::StatementContext *ctx) {
+  /// do redundant checking
   has_err = false;
+  tables_stack.clear();
+  insert_into_table = nullptr;
   return visitChildren(ctx);
 }
 
@@ -92,9 +95,47 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
     return std::any();
   }
   ctx->value_lists()->accept(this);
-  insert_into_table = nullptr;
   /// reset table data so that (column IN value_list) can be parse correctly
+  insert_into_table = nullptr;
   return true;
+}
+
+/// 'UPDATE' Identifier 'SET' set_clause 'WHERE' where_and_clause
+std::any ScapeVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
+  std::string table_name = ctx->Identifier()->getText();
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
+    has_err = true;
+    return std::any();
+  }
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s not found\n", table_name.data());
+    has_err = true;
+    return std::any();
+  }
+  tables_stack.push_back({table});
+
+  if (ctx->set_clause() != nullptr) {
+    std::any ret_set = ctx->set_clause()->accept(this);
+    if (!ret_set.has_value()) {
+      return std::any();
+    }
+  }
+
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
+  if (ctx->where_and_clause() != nullptr) {
+    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    if (!ret_cons.has_value()) {
+      return std::any();
+    }
+    constraints = std::any_cast<std::vector<std::shared_ptr<WhereConstraint>>>(
+        std::move(ret_cons));
+  }
+
+  tables_stack.pop_back();
+  return std::any();
 }
 
 std::any
@@ -138,7 +179,7 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   if (!ret_sel.has_value()) {
     return std::any();
   }
-  auto selector = std::move(std::any_cast<std::shared_ptr<Selector>>(ret_sel));
+  auto selector = std::any_cast<std::shared_ptr<Selector>>(std::move(ret_sel));
 
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   if (ctx->where_and_clause() != nullptr) {
@@ -146,8 +187,8 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
     if (!ret_cons.has_value()) {
       return std::any();
     }
-    constraints = std::move(
-        std::any_cast<std::vector<std::shared_ptr<WhereConstraint>>>(ret_cons));
+    constraints = std::any_cast<std::vector<std::shared_ptr<WhereConstraint>>>(
+        std::move(ret_cons));
   }
 
   auto planner = std::make_shared<QueryPlanner>();
@@ -222,6 +263,15 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
   } else {
     insert_into_table->insert_record(vals);
     return std::any();
+  }
+}
+
+std::any ScapeVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
+  std::shared_ptr<TableManager> selected_tables = tables_stack.back()[0];
+  int num = ctx->Identifier().size();
+  for (int i = 0; i < num; i++) {
+    std::string col_name = ctx->Identifier(i)->getText();
+    std::any val = ctx->value(i)->accept(this);
   }
 }
 
