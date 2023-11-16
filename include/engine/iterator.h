@@ -22,7 +22,7 @@ const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
 class Iterator {
 protected:
   IteratorType type;
-  bool source_ended;
+  bool source_ended, no_buffer;
   int fd_dst, fd_src;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   std::vector<std::shared_ptr<Field>> fields_src, fields_dst;
@@ -45,7 +45,7 @@ public:
   void block_next();
   bool block_end() const { return dst_iter == n_records; }
   bool all_end() const { return source_ended && dst_iter == n_records; }
-  virtual void get(std::vector<uint8_t> &buf);
+  void get(std::vector<uint8_t> &buf);
 
   /// fill next block of records into buffer and reset block iter
   /// @return number of records filled
@@ -62,12 +62,13 @@ private:
   std::vector<int>::iterator it;
 
 public:
-  /// @param cons consists only of self-related constraints
+  /// @param cons will be filtered
   /// @param fields_dst will be filtered with fields_src
   RecordIterator(std::shared_ptr<RecordManager> rec,
                  const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                  const std::vector<std::shared_ptr<Field>> &fields_src,
                  const std::vector<std::shared_ptr<Field>> &fields_dst);
+  RecordIterator();
   ~RecordIterator();
   bool get_next_valid();
   void reset_all() override;

@@ -50,7 +50,7 @@ RecordIterator::RecordIterator(
   for (auto &field : fields_src) {
     field_ids_src.insert(field->field_id);
   }
-  record_len = 0;
+  record_len = sizeof(bitmap_t);
   for (auto field : fields_dst_) {
     if (!field_ids_src.contains(field->field_id)) {
       continue;
@@ -99,18 +99,18 @@ int RecordIterator::fill_next_block() {
     return 0;
 
   for (int i = 0; i < record_per_page * QUERY_MAX_PAGES; ++i) {
-    const uint8_t *p;
+    const uint8_t *ptr_src;
+    bitmap_t src_bitmap = 0;
     bool match = false;
     do {
       if (!get_next_valid()) {
         break;
       }
-      p = record_manager->get_record_ref(pagenum_src, slotnum_src);
+      ptr_src = record_manager->get_record_ref(pagenum_src, slotnum_src);
       match = true;
-      bitmap_t nullstate = *(const bitmap_t *)p;
-      p += sizeof(bitmap_t);
+      src_bitmap = *(const bitmap_t *)ptr_src;
       for (auto constraint : constraints) {
-        if (!constraint->check(nullstate, p)) {
+        if (!constraint->check(src_bitmap, ptr_src)) {
           match = false;
           break;
         }
@@ -119,19 +119,27 @@ int RecordIterator::fill_next_block() {
     if (source_ended)
       break;
 
-    int slot = i % record_per_page;
-    if (slot == 0) {
+    int dst_slot = i % record_per_page;
+    if (dst_slot == 0) {
       current_dst_page = PagedBuffer::get()->read_file(
           std::make_pair(fd_dst, i / record_per_page));
       PagedBuffer::get()->mark_dirty(current_dst_page);
     }
-    auto ptr = current_dst_page + slot * record_len;
-    int dst_offset = 0;
+    auto ptr_dst = current_dst_page + dst_slot * record_len;
+    int offset_dst = sizeof(bitmap_t);
+    src_bitmap = *(const bitmap_t *)ptr_src;
+    bitmap_t dst_bitmap = 0;
     for (int i = 0; i < fields_dst.size(); ++i) {
-      memcpy(ptr + dst_offset, p + offset_remap[i].first,
-             offset_remap[i].second);
-      dst_offset += offset_remap[i].second;
+      int index = fields_dst[i]->pers_index;
+      int length = fields_dst[i]->get_size();
+      if ((src_bitmap >> index) & 1) {
+        dst_bitmap |= 1 << i;
+        memcpy(ptr_dst + offset_dst, ptr_src + fields_dst[i]->pers_offset,
+               length);
+      }
+      offset_dst += length;
     }
+    *(bitmap_t *)ptr_dst = dst_bitmap;
     n_records = i + 1;
   }
   return n_records;

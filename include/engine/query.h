@@ -29,8 +29,11 @@ struct Selector {
   }
 };
 
+/// where clause is managed with shared_ptr to better support derived classes
 struct WhereConstraint {
   int table_id;
+  int column_index, column_offset;
+  int value; /// reserved for BPlusTree, which supports only integer
   ConstraintType type;
 
   virtual bool check(bitmap_t nullstate, const uint8_t *record) const {
@@ -45,6 +48,11 @@ struct ColumnOpValueConstraint : public WhereConstraint {
   ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
                           std::any val);
   bool check(bitmap_t nullstate, const uint8_t *record) const override;
+};
+
+struct SetVariable {
+  std::function<void(bitmap_t *, char *)> set;
+  SetVariable(std::shared_ptr<Field> field, std::any &&value);
 };
 
 struct QueryPlanner {

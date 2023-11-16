@@ -106,8 +106,6 @@ private:
 
   int table_id;
 
-  std::vector<uint8_t> temp_buf;
-
   TableManager(DatabaseManager *par, const std::string &name, unified_id_t id);
   TableManager(DatabaseManager *par, const std::string &name, unified_id_t id,
                std::vector<std::shared_ptr<Field>> &&fields);
@@ -142,4 +140,6 @@ public:
     return record_manager;
   }
   void insert_record(const std::vector<std::any> &values);
+  void insert_record(uint8_t *ptr);
+  // TODO: implement primary/foreign key constraints check
 };

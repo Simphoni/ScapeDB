@@ -1,5 +1,5 @@
-#include "engine/defs.h"
 #include <cassert>
+#include <cstring>
 
 #include <engine/field.h>
 #include <engine/iterator.h>
@@ -24,6 +24,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   table_id = field->table_id;
   int column_index = field->pers_index;
   int column_offset = field->pers_offset;
+  this->column_index = column_index;
+  this->column_offset = column_offset;
   if (field->data_meta->type == DataType::INT) {
     if (val.type() != typeid(int)) {
       printf("ERROR: where clause type mismatch (expect INT)\n");
@@ -31,6 +33,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       return;
     }
     int value = std::any_cast<int>(std::move(val));
+    this->value = value;
     switch (op) {
     case Operator::EQ:
       cmp = [=](bitmap_t nullstate, const char *record) {
@@ -212,4 +215,67 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
 bool ColumnOpValueConstraint::check(bitmap_t nullstate,
                                     const uint8_t *record) const {
   return cmp(nullstate, (char *)record);
+}
+
+SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
+  /// default value should not be used here
+  int column_index = field->pers_index;
+  int column_offset = field->pers_offset;
+  if (!value_.has_value()) {
+    if (field->notnull) {
+      printf("ERROR: attempt to violate Not Null constraint\n");
+      has_err = true;
+      return;
+    }
+    set = [=](bitmap_t *nullstate, char *record) {
+      *nullstate &= ~(1 << column_index);
+    };
+    return;
+  }
+  if (field->data_meta->type == INT) {
+    int val = 0;
+    if (value_.type() == typeid(int)) {
+      val = std::any_cast<int>(value_);
+    } else if (value_.type() == typeid(float)) {
+      val = std::any_cast<float>(value_);
+    } else {
+      printf("ERROR: where clause type mismatch (expect INT)\n");
+      has_err = true;
+      return;
+    }
+    set = [=](bitmap_t *nullstate, char *record) {
+      *nullstate |= (1 << column_index);
+      *(int *)(record + column_offset) = std::any_cast<int>(value_);
+    };
+  } else if (field->data_meta->type == FLOAT) {
+    float val = 0;
+    if (value_.type() == typeid(int)) {
+      val = std::any_cast<int>(value_);
+    } else if (value_.type() == typeid(float)) {
+      val = std::any_cast<float>(value_);
+    } else {
+      printf("ERROR: where clause type mismatch (expect FLOAT)\n");
+      has_err = true;
+      return;
+    }
+    set = [=](bitmap_t *nullstate, char *record) {
+      *nullstate |= (1 << column_index);
+      *(float *)(record + column_offset) = std::any_cast<float>(value_);
+    };
+  } else if (field->data_meta->type == VARCHAR) {
+    std::string s;
+    int mxlen = field->get_size();
+    if (value_.type() != typeid(std::string())) {
+      printf("ERROR: where clause type mismatch (expect VARCHAR)\n");
+      has_err = true;
+      return;
+    }
+    s = std::any_cast<std::string>(value_);
+    set = [=](bitmap_t *nullstate, char *record) {
+      *nullstate |= (1 << column_index);
+      memset(record + column_offset, 0, mxlen + 1);
+      memcpy(record + column_offset, s.data(), s.size());
+      record[column_offset + s.size()] = 0;
+    };
+  }
 }

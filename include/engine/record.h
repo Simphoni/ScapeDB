@@ -80,4 +80,8 @@ public:
   uint8_t *get_record_ref(int pageid, int slotid);
   std::pair<int, int> insert_record(const uint8_t *ptr);
   void erase_record(int pageid, int slotid);
+  void update_all_records(
+      std::shared_ptr<TableManager> table,
+      std::vector<SetVariable> &set_variables,
+      std::vector<std::shared_ptr<WhereConstraint>> &where_constraints);
 };

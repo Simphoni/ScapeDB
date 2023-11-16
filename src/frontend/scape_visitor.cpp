@@ -1,3 +1,4 @@
+#include "engine/defs.h"
 #include <cmath>
 #include <memory>
 #include <tuple>
@@ -117,11 +118,13 @@ std::any ScapeVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
   }
   tables_stack.push_back({table});
 
+  std::vector<SetVariable> set_vars;
   if (ctx->set_clause() != nullptr) {
     std::any ret_set = ctx->set_clause()->accept(this);
-    if (!ret_set.has_value()) {
+    if (!ret_set.has_value() || ret_set.type() != typeid(decltype(set_vars))) {
       return std::any();
     }
+    set_vars = std::any_cast<std::vector<SetVariable>>(std::move(ret_set));
   }
 
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
@@ -134,6 +137,7 @@ std::any ScapeVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
         std::move(ret_cons));
   }
 
+  ScapeSQL::update_table(table, std::move(set_vars), std::move(constraints));
   tables_stack.pop_back();
   return std::any();
 }
@@ -214,6 +218,7 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
   return fields;
 }
 
+/// Identifier type_ ('NOT' Null)? ('DEFAULT' value)?
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   std::shared_ptr<Field> field =
       std::make_shared<Field>(ctx->Identifier()->getText(), get_unified_id());
@@ -236,6 +241,7 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   return field;
 }
 
+/// Integer | String | Float | Null
 std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
   if (ctx->Integer() != nullptr) {
     return std::stoi(ctx->Integer()->getText());
@@ -266,13 +272,25 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
   }
 }
 
+/// Identifier EqualOrAssign value (',' Identifier EqualOrAssign value)*
 std::any ScapeVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
-  std::shared_ptr<TableManager> selected_tables = tables_stack.back()[0];
+  if (has_err) {
+    return std::any();
+  }
+  std::shared_ptr<TableManager> table = tables_stack.back()[0];
+  std::vector<SetVariable> set_vars;
   int num = ctx->Identifier().size();
   for (int i = 0; i < num; i++) {
     std::string col_name = ctx->Identifier(i)->getText();
-    std::any val = ctx->value(i)->accept(this);
+    auto field = table->get_field(col_name);
+    if (field == nullptr) {
+      has_err = true;
+      printf("ERROR: column %s not found", col_name.data());
+      return std::any();
+    }
+    set_vars.push_back(SetVariable(field, ctx->value(i)->accept(this)));
   }
+  return set_vars;
 }
 
 std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {

@@ -138,7 +138,7 @@ void print(float x, int width) {
   std::cout << std::string(width - slen, ' ') << buf;
 }
 
-void print(char *p, int width) {
+void print(const char *p, int width) {
   int slen = strlen(p);
   std::cout << std::string(width - slen, ' ') << p;
 }
@@ -177,20 +177,26 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
     }
     it->get(record);
     const uint8_t *p = record.data();
+    bitmap_t bitmap = *(bitmap_t *)p;
+    p += sizeof(bitmap_t);
     std::cout << "|";
     for (int i = 0; i < ncol; i++) {
-      switch (field[i]->data_meta->type) {
-      case DataType::INT:
-        print(*(int *)(p), maxlen[i]);
-        break;
-      case DataType::FLOAT:
-        print(*(float *)(p), maxlen[i]);
-        break;
-      case DataType::VARCHAR:
-        print((char *)(p), maxlen[i]);
-        break;
-      default:
-        assert(false);
+      if ((bitmap >> i) & 1) {
+        switch (field[i]->data_meta->type) {
+        case DataType::INT:
+          print(*(int *)(p), maxlen[i]);
+          break;
+        case DataType::FLOAT:
+          print(*(float *)(p), maxlen[i]);
+          break;
+        case DataType::VARCHAR:
+          print((const char *)(p), maxlen[i]);
+          break;
+        default:
+          assert(false);
+        }
+      } else {
+        print("NULL", maxlen[i]);
       }
       std::cout << " |";
       p += field[i]->get_size();
@@ -214,7 +220,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
     printf("%s%c", header[i].data(), i == ncol - 1 ? '\n' : ',');
   }
   /// make content
-  std::vector<uint8_t> record;
+  static std::vector<uint8_t> record;
   record.reserve(4096);
   while (!it->all_end()) {
     if (it->block_end()) {
@@ -225,19 +231,25 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
     }
     it->get(record);
     const uint8_t *p = record.data();
+    bitmap_t bitmap = *(bitmap_t *)p;
+    p += sizeof(bitmap_t);
     for (int i = 0; i < ncol; i++) {
-      switch (field[i]->data_meta->type) {
-      case DataType::INT:
-        printf("%d", *(int *)(p));
-        break;
-      case DataType::FLOAT:
-        printf("%s", singleToStrTrimmed(*(float *)(p)));
-        break;
-      case DataType::VARCHAR:
-        printf("%s", (char *)(p));
-        break;
-      default:
-        assert(false);
+      if ((bitmap >> i) & 1) {
+        switch (field[i]->data_meta->type) {
+        case DataType::INT:
+          printf("%d", *(int *)(p));
+          break;
+        case DataType::FLOAT:
+          printf("%s", singleToStrTrimmed(*(float *)(p)));
+          break;
+        case DataType::VARCHAR:
+          printf("%s", (char *)(p));
+          break;
+        default:
+          assert(false);
+        }
+      } else {
+        printf("NULL");
       }
       putchar(i == ncol - 1 ? '\n' : ',');
       p += field[i]->get_size();

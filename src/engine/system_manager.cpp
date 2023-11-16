@@ -198,7 +198,7 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
                            std::vector<std::shared_ptr<Field>> &&fields_)
     : TableManager(par, name, id) {
   fields = std::move(fields_);
-  record_len = 0;
+  record_len = sizeof(bitmap_t);
   for (size_t i = 0; i < fields.size(); ++i) {
     name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
     fields[i]->pers_index = i;
@@ -206,7 +206,6 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
     fields[i]->table_id = table_id;
     record_len += fields[i]->get_size();
   }
-  record_len += sizeof(bitmap_t);
   record_manager = std::make_shared<RecordManager>(this);
   dirty = true;
 }
@@ -227,7 +226,7 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) {
 }
 
 void TableManager::table_meta_read() {
-  record_len = 0;
+  record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
     printf("ERROR: table metadata file %s is invalid.", meta_file.data());
@@ -248,7 +247,6 @@ void TableManager::table_meta_read() {
     ptr_available = accessor.read<uint32_t>();
     // TODO: read index metadata
   }
-  record_len += sizeof(bitmap_t);
   record_manager = std::make_shared<RecordManager>(this);
 }
 
@@ -272,6 +270,7 @@ void TableManager::purge() {
 }
 
 void TableManager::insert_record(const std::vector<std::any> &values) {
+  static std::vector<uint8_t> temp_buf;
   temp_buf.resize(record_len);
   memset(temp_buf.data(), 0, temp_buf.size());
   uint8_t *ptr = temp_buf.data();

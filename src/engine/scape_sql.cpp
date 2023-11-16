@@ -4,6 +4,7 @@
 #include <engine/field.h>
 #include <engine/iterator.h>
 #include <engine/query.h>
+#include <engine/record.h>
 #include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <utils/logger.h>
@@ -116,6 +117,23 @@ void describe_table(const std::string &s) {
     }
   }
   Logger::tabulate(table, table.size() / 4, 4);
+}
+
+void update_table(
+    std::shared_ptr<TableManager> table,
+    std::vector<SetVariable> &&set_variables,
+    std::vector<std::shared_ptr<WhereConstraint>> &&where_constraints) {
+  if (has_err) {
+    return;
+  }
+  // checks:
+  // 1. check if the new value conform to foreign key constraint
+  // 2. if primary key is changed - check if primary key is referenced/duplicate
+  // alters:
+  // 1. record file - use get_record_ref()
+  // 2. index file
+  table->get_record_manager()->update_all_records(table, set_variables,
+                                                  where_constraints);
 }
 
 } // namespace ScapeSQL

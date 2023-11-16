@@ -23,6 +23,7 @@ struct Field;
 /// query.h
 struct Selector;
 struct WhereConstraint;
+struct SetVariable;
 struct QueryPlanner;
 
 /// iterator.h
