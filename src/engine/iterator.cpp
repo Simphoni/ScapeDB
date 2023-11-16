@@ -110,7 +110,7 @@ int RecordIterator::fill_next_block() {
       match = true;
       src_bitmap = *(const bitmap_t *)ptr_src;
       for (auto constraint : constraints) {
-        if (!constraint->check(src_bitmap, ptr_src)) {
+        if (!constraint->check(ptr_src, nullptr)) {
           match = false;
           break;
         }

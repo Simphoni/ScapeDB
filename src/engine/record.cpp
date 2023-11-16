@@ -91,6 +91,7 @@ void RecordManager::update_all_records(
     std::vector<SetVariable> &set_variables,
     std::vector<std::shared_ptr<WhereConstraint>> &where_constraints) {
   // TODO: primary/foreign key constraints check
+  /*
   for (int i = 0; i < n_pages; i++) {
     current_page = PagedBuffer::get()->read_file(std::make_pair(fd, i));
     FixedBitmap headmask(headmask_size,
@@ -115,5 +116,5 @@ void RecordManager::update_all_records(
         }
       }
     }
-  }
+  }*/
 }

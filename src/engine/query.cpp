@@ -36,36 +36,42 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     this->value = value;
     switch (op) {
     case Operator::EQ:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) == value);
       };
       break;
     case Operator::NE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) != value);
       };
     case Operator::GE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) >= value);
       };
       break;
     case Operator::GT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) > value);
       };
       break;
     case Operator::LE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) <= value);
       };
       break;
     case Operator::LT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const int *)(record + column_offset) < value);
       };
@@ -86,36 +92,42 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     }
     switch (op) {
     case Operator::EQ:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) == value);
       };
       break;
     case Operator::NE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) != value);
       };
     case Operator::GE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) >= value);
       };
       break;
     case Operator::GT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) > value);
       };
       break;
     case Operator::LE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) <= value);
       };
       break;
     case Operator::LT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
                (*(const float *)(record + column_offset) < value);
       };
@@ -133,7 +145,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     int len = value.length();
     switch (op) {
     case Operator::EQ:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -144,7 +157,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       };
       break;
     case Operator::NE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -155,7 +169,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       };
       break;
     case Operator::GE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -168,7 +183,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       };
       break;
     case Operator::GT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -181,7 +197,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       };
       break;
     case Operator::LE:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -194,7 +211,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       };
       break;
     case Operator::LT:
-      cmp = [=](bitmap_t nullstate, const char *record) {
+      cmp = [=](const char *record) {
+        bitmap_t nullstate = *(const bitmap_t *)record;
         if (((nullstate >> column_index) & 1) == 0)
           return false;
         for (int i = 0; i < len; ++i) {
@@ -212,9 +230,9 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   }
 }
 
-bool ColumnOpValueConstraint::check(bitmap_t nullstate,
-                                    const uint8_t *record) const {
-  return cmp(nullstate, (char *)record);
+bool ColumnOpValueConstraint::check(const uint8_t *record,
+                                    const uint8_t *other) const {
+  return cmp((char *)record);
 }
 
 SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {

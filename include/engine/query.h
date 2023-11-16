@@ -36,18 +36,18 @@ struct WhereConstraint {
   int value; /// reserved for BPlusTree, which supports only integer
   ConstraintType type;
 
-  virtual bool check(bitmap_t nullstate, const uint8_t *record) const {
+  virtual bool check(const uint8_t *record, const uint8_t *other) const {
     return true;
   }
   virtual bool live_in(int table_id_) { return table_id == table_id_; }
 };
 
 struct ColumnOpValueConstraint : public WhereConstraint {
-  std::function<bool(bitmap_t, const char *)> cmp;
+  std::function<bool(const char *)> cmp;
 
   ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
                           std::any val);
-  bool check(bitmap_t nullstate, const uint8_t *record) const override;
+  bool check(const uint8_t *record, const uint8_t *other) const override;
 };
 
 struct SetVariable {
