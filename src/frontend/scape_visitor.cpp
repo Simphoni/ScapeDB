@@ -102,7 +102,40 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
     // TODO: uncomment this line
     // Logger::tabulate({"rows", std::to_string(n_entries_inserted)}, 2, 1);
   }
-  return true;
+  return std::any();
+}
+
+/// 'DELETE' 'FROM' Identifier 'WHERE' where_and_clause
+std::any
+ScapeVisitor::visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) {
+  std::string table_name = ctx->Identifier()->getText();
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
+    has_err = true;
+    return std::any();
+  }
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s not found\n", table_name.data());
+    has_err = true;
+    return std::any();
+  }
+  tables_stack.push_back({table});
+
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
+  if (ctx->where_and_clause() != nullptr) {
+    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    if (!ret_cons.has_value()) {
+      return std::any();
+    }
+    constraints = std::any_cast<std::vector<std::shared_ptr<WhereConstraint>>>(
+        std::move(ret_cons));
+  }
+  tables_stack.pop_back();
+
+  ScapeSQL::delete_from_table(table, std::move(constraints));
+  return std::any();
 }
 
 /// 'UPDATE' Identifier 'SET' set_clause 'WHERE' where_and_clause
@@ -141,7 +174,8 @@ std::any ScapeVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
         std::move(ret_cons));
   }
 
-  ScapeSQL::update_table(table, std::move(set_vars), std::move(constraints));
+  ScapeSQL::update_set_table(table, std::move(set_vars),
+                             std::move(constraints));
   tables_stack.pop_back();
   return std::any();
 }

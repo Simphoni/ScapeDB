@@ -79,7 +79,7 @@ public:
   int get_fd() const noexcept { return fd; }
   uint8_t *get_record_ref(int pageid, int slotid);
   std::pair<int, int> insert_record(const uint8_t *ptr);
-  void erase_record(int pageid, int slotid);
+  void erase_record(int pagenum, int slotnum);
   void update_all_records(
       std::shared_ptr<TableManager> table,
       std::vector<SetVariable> &set_variables,

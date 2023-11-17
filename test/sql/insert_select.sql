@@ -6,3 +6,5 @@ SELECT * FROM t1;
 SELECT * FROM t1 WHERE c = 'a';
 UPDATE t1 SET c = 'c' WHERE a = 1;
 SELECT * FROM t1;
+DELETE FROM t1 WHERE c = 'b';
+SELECT * FROM t1;

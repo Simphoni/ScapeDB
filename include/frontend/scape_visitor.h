@@ -41,6 +41,9 @@ public:
   std::any
   visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
 
+  std::any
+  visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) override;
+
   std::any visitUpdate_table(SQLParser::Update_tableContext *ctx) override;
 
   /// visitSelect_table_ is a wrapper for top-level select-table statement

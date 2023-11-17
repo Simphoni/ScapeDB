@@ -119,7 +119,7 @@ void describe_table(const std::string &s) {
   Logger::tabulate(table, table.size() / 4, 4);
 }
 
-void update_table(
+void update_set_table(
     std::shared_ptr<TableManager> table,
     std::vector<SetVariable> &&set_variables,
     std::vector<std::shared_ptr<WhereConstraint>> &&where_constraints) {
@@ -152,6 +152,28 @@ void update_table(
     modified_rows++;
   }
   // TODO: uncomment this
+  // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+}
+
+void delete_from_table(
+    std::shared_ptr<TableManager> table,
+    std::vector<std::shared_ptr<WhereConstraint>> &&where_constraints) {
+  if (has_err) {
+    return;
+  }
+  // TODO: add index iterator to speed up search
+  auto record_manager = table->get_record_manager();
+  auto record_iter = std::make_shared<RecordIterator>(
+      record_manager, where_constraints, table->get_fields(),
+      std::vector<std::shared_ptr<Field>>({}));
+  int modified_rows = 0;
+  while (record_iter->get_next_valid()) {
+    auto [pagenum, slotnum] = record_iter->get_valid_pos();
+    auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
+    /// TODO: perform checking
+    record_manager->erase_record(pagenum, slotnum);
+    modified_rows++;
+  }
   // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
 }
 
