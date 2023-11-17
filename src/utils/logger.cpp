@@ -68,6 +68,7 @@ int fmt_width(std::shared_ptr<Field> f) {
 
 void print(int x, int width) { std::cout << std::setw(width) << x; }
 
+#ifdef USE_SINGLE
 static constexpr int kSingleDigit = std::numeric_limits<float>::digits10;
 
 /// a naive workaround to simulate MySQL behavior
@@ -132,9 +133,11 @@ char *singleToStrTrimmed(float x) {
   buf[slen - 2] = '\0';
   return buf;
 }
+#endif
 
-void print(float x, int width) {
-  char *buf = singleToStrTrimmed(x);
+void print(double x, int width) {
+  char buf[50];
+  sprintf(buf, "%.2f", x);
   int slen = strlen(buf);
   std::cout << std::string(width - slen, ' ') << buf;
 }
@@ -188,7 +191,7 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
           print(*(int *)(p), maxlen[i]);
           break;
         case DataType::FLOAT:
-          print(*(float *)(p), maxlen[i]);
+          print(*(double *)(p), maxlen[i]);
           break;
         case DataType::VARCHAR:
           print((const char *)(p), maxlen[i]);
@@ -241,7 +244,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
           printf("%d", *(int *)(p));
           break;
         case DataType::FLOAT:
-          printf("%s", singleToStrTrimmed(*(float *)(p)));
+          printf("%.2f", *(double *)(p));
           break;
         case DataType::VARCHAR:
           printf("%s", (char *)(p));

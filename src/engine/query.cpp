@@ -80,11 +80,11 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       assert(false);
     }
   } else if (field->data_meta->type == DataType::FLOAT) {
-    float value = 0;
+    double value = 0;
     if (val.type() == typeid(int)) {
       value = std::any_cast<int>(std::move(val));
-    } else if (val.type() == typeid(float)) {
-      value = std::any_cast<float>(std::move(val));
+    } else if (val.type() == typeid(double)) {
+      value = std::any_cast<double>(std::move(val));
     } else {
       printf("ERROR: where clause type mismatch (expect FLOAT, got VARCHAR)\n");
       has_err = true;
@@ -95,41 +95,41 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) == value);
+               (*(const double *)(record + column_offset) == value);
       };
       break;
     case Operator::NE:
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) != value);
+               (*(const double *)(record + column_offset) != value);
       };
     case Operator::GE:
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) >= value);
+               (*(const double *)(record + column_offset) >= value);
       };
       break;
     case Operator::GT:
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) > value);
+               (*(const double *)(record + column_offset) > value);
       };
       break;
     case Operator::LE:
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) <= value);
+               (*(const double *)(record + column_offset) <= value);
       };
       break;
     case Operator::LT:
       cmp = [=](const char *record) {
         bitmap_t nullstate = *(const bitmap_t *)record;
         return ((nullstate >> column_index) & 1) &&
-               (*(const float *)(record + column_offset) < value);
+               (*(const double *)(record + column_offset) < value);
       };
       break;
     default:
@@ -252,8 +252,8 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     int val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
-    } else if (value_.type() == typeid(float)) {
-      val = std::any_cast<float>(value_);
+    } else if (value_.type() == typeid(double)) {
+      val = std::any_cast<double>(value_);
     } else {
       printf("ERROR: where clause type mismatch (expect INT)\n");
       has_err = true;
@@ -264,11 +264,11 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       *(int *)(record + column_offset) = std::any_cast<int>(value_);
     };
   } else if (field->data_meta->type == FLOAT) {
-    float val = 0;
+    double val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
-    } else if (value_.type() == typeid(float)) {
-      val = std::any_cast<float>(value_);
+    } else if (value_.type() == typeid(double)) {
+      val = std::any_cast<double>(value_);
     } else {
       printf("ERROR: where clause type mismatch (expect FLOAT)\n");
       has_err = true;
@@ -276,7 +276,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     }
     set = [=](char *record) {
       *(bitmap_t *)record |= 1 << column_index;
-      *(float *)(record + column_offset) = std::any_cast<float>(value_);
+      *(double *)(record + column_offset) = std::any_cast<double>(value_);
     };
   } else if (field->data_meta->type == VARCHAR) {
     std::string s;

@@ -6,8 +6,8 @@
 #include <engine/field.h>
 #include <storage/storage.h>
 
-uint32_t cast_f2i(float x) { return *reinterpret_cast<uint32_t *>(&x); }
-float cast_i2f(uint32_t x) { return *reinterpret_cast<float *>(&x); }
+uint64_t cast_f2i(double x) { return *reinterpret_cast<uint64_t *>(&x); }
+double cast_i2f(uint64_t x) { return *reinterpret_cast<double *>(&x); }
 
 std::shared_ptr<DataTypeHolderBase>
 DataTypeHolderBase::build(const std::string &s) {
@@ -87,8 +87,8 @@ void IntHolder::deserialize(SequentialAccessor &s) {
 /// Field DataType: FLOAT
 
 void FloatHolder::set_default_value(std::any val) {
-  if (val.type() == typeid(float)) {
-    value = std::any_cast<float>(std::move(val));
+  if (val.type() == typeid(double)) {
+    value = std::any_cast<double>(std::move(val));
   } else if (val.type() == typeid(int)) {
     value = std::any_cast<int>(std::move(val));
   } else {
@@ -100,16 +100,16 @@ void FloatHolder::set_default_value(std::any val) {
 uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
-    if (val.type() == typeid(float)) {
-      *(float *)ptr = std::any_cast<float>(std::move(val));
+    if (val.type() == typeid(double)) {
+      *(double *)ptr = std::any_cast<double>(std::move(val));
     } else if (val.type() == typeid(int)) {
-      *(float *)ptr = std::any_cast<int>(std::move(val));
+      *(double *)ptr = std::any_cast<int>(std::move(val));
     } else {
       printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
-    *(float *)ptr = value;
+    *(double *)ptr = value;
   } else {
     if (notnull) {
       printf("ERROR: not null constraint\n");
@@ -124,7 +124,7 @@ void FloatHolder::serealize(SequentialAccessor &s) const {
   s.write_byte(FLOAT);
   s.write_byte(has_default_val);
   if (has_default_val) {
-    s.write<uint32_t>(cast_f2i(value));
+    s.write<uint64_t>(cast_f2i(value));
   }
 }
 

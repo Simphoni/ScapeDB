@@ -284,7 +284,7 @@ std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
   if (ctx->Integer() != nullptr) {
     return std::stoi(ctx->Integer()->getText());
   } else if (ctx->Float() != nullptr) {
-    return std::stof(ctx->Float()->getText());
+    return std::stod(ctx->Float()->getText());
   } else if (ctx->String() != nullptr) {
     auto temp = ctx->String()->getText();
     return temp.substr(1, temp.size() - 2);

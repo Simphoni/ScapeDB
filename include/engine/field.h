@@ -45,16 +45,16 @@ struct IntHolder : public DataTypeHolderBase {
 };
 
 struct FloatHolder : public DataTypeHolderBase {
-  float value;
+  double value;
 
   FloatHolder() { type = FLOAT; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
-    value = std::stof(s);
+    value = std::stod(s);
   }
   std::string type_str() override { return "FLOAT"; }
   std::string val_str() override { return std::to_string(value); }
-  int get_size() const override { return sizeof(float); }
+  int get_size() const override { return sizeof(double); }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serealize(SequentialAccessor &s) const override;
