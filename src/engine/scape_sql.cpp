@@ -7,6 +7,7 @@
 #include <engine/record.h>
 #include <engine/scape_sql.h>
 #include <frontend/frontend.h>
+#include <storage/fastio.h>
 #include <utils/logger.h>
 
 namespace ScapeSQL {
@@ -175,6 +176,94 @@ void delete_from_table(
     modified_rows++;
   }
   // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+}
+
+void insert_from_file(const std::string &file_path,
+                      const std::string &table_name) {
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected\n");
+    return;
+  }
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s does not exist\n", table_name.data());
+    return;
+  }
+  auto record_manager = table->get_record_manager();
+  const std::vector<std::shared_ptr<Field>> fields = table->get_fields();
+  int column_num = fields.size();
+  std::vector<int> offsets;
+  for (auto field : fields) {
+    offsets.push_back(field->pers_offset);
+  }
+
+  if (!fastIO::set_file(file_path)) {
+    printf("ERROR: file %s does not exist\n", file_path.data());
+    return;
+  }
+  char ch = fastIO::getchar();
+  static std::vector<uint8_t> buf;
+  buf.resize(table->get_record_len());
+  uint8_t *ptr = buf.data();
+  *(bitmap_t *)ptr = (1 << column_num) - 1;
+  while (true) {
+    while (ch == ',' || ch == '\n') {
+      ch = fastIO::getchar();
+    }
+    if (ch == -1)
+      break;
+    for (int i = 0; i < column_num; ++i) {
+      if (fields[i]->data_meta->type == DataType::INT) {
+        while (!isdigit(ch))
+          ch = fastIO::getchar();
+        int val = 0;
+        while (isdigit(ch)) {
+          val = val * 10 + ch - '0';
+          ch = fastIO::getchar();
+        }
+        memcpy(ptr + offsets[i], &val, sizeof(int));
+      } else if (fields[i]->data_meta->type == DataType::FLOAT) {
+        double val = 0, base = 1;
+        bool neg = false;
+        while (!isdigit(ch) && ch != '-')
+          ch = fastIO::getchar();
+        if (ch == '-') {
+          neg = true;
+          ch = fastIO::getchar();
+        }
+        while (!isdigit(ch) && ch != '.') {
+          val = val * 10 + ch - '0';
+          ch = fastIO::getchar();
+        }
+        if (ch == '.') {
+          ch = fastIO::getchar();
+          while (isdigit(ch)) {
+            base *= 0.1;
+            val += base * (ch - '0');
+            ch = fastIO::getchar();
+          }
+        }
+        if (neg) {
+          val = -val;
+        }
+        memcpy(ptr + offsets[i], &val, sizeof(double));
+      } else {
+        if (ch == ',')
+          ch = fastIO::getchar();
+        char *myptr = (char *)ptr + offsets[i];
+        int myit = 0;
+        while (ch != '\n' && ch != ',') {
+          myptr[myit++] = ch;
+          ch = fastIO::getchar();
+        }
+        memset(myptr, 0,
+               sizeof(char) * (fields[i]->data_meta->get_size() - myit));
+      }
+    }
+    record_manager->insert_record(ptr);
+  }
+  fastIO::end_read();
 }
 
 } // namespace ScapeSQL

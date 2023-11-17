@@ -1,5 +1,4 @@
 #pragma once
-#include "engine/system_manager.h"
 #include <engine/defs.h>
 #include <storage/storage.h>
 
@@ -23,5 +22,7 @@ void update_set_table(
 void delete_from_table(
     std::shared_ptr<TableManager> table,
     std::vector<std::shared_ptr<WhereConstraint>> &&where_constraints);
+void insert_from_file(const std::string &file_path,
+                      const std::string &table_name);
 
 } // namespace ScapeSQL

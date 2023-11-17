@@ -85,36 +85,3 @@ void RecordManager::erase_record(int pageid, int slotid) {
   }
   headmask->unset(slotid);
 }
-
-void RecordManager::update_all_records(
-    std::shared_ptr<TableManager> table,
-    std::vector<SetVariable> &set_variables,
-    std::vector<std::shared_ptr<WhereConstraint>> &where_constraints) {
-  // TODO: primary/foreign key constraints check
-  /*
-  for (int i = 0; i < n_pages; i++) {
-    current_page = PagedBuffer::get()->read_file(std::make_pair(fd, i));
-    FixedBitmap headmask(headmask_size,
-                         (uint64_t *)(current_page + BITMAP_START_OFFSET));
-    bool dirty = false;
-    auto valids = headmask.get_valid_indices();
-    for (auto slotid : valids) {
-      auto ptr = current_page + header_len + slotid * record_len;
-      bitmap_t *nullstate = (bitmap_t *)ptr;
-      ptr += sizeof(bitmap_t);
-      bool match = true;
-      for (auto constraint : where_constraints) {
-        if (!constraint->check(*nullstate, ptr)) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        dirty = true;
-        for (auto &set_variable : set_variables) {
-          set_variable.set(nullstate, (char *)ptr);
-        }
-      }
-    }
-  }*/
-}

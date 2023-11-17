@@ -38,6 +38,8 @@ public:
 
   std::any visitDescribe_table(SQLParser::Describe_tableContext *ctx) override;
 
+  std::any visitLoad_table(SQLParser::Load_tableContext *ctx) override;
+
   std::any
   visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
 

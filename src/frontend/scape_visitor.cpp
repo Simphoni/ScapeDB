@@ -79,6 +79,17 @@ ScapeVisitor::visitDescribe_table(SQLParser::Describe_tableContext *ctx) {
   return tbl_name;
 }
 
+std::any ScapeVisitor::visitLoad_table(SQLParser::Load_tableContext *ctx) {
+  if (ctx->String(0) == nullptr || ctx->Identifier() == nullptr) {
+    has_err = true;
+    return std::any();
+  }
+  std::string file_name = ctx->String(0)->getText();
+  std::string tbl_name = ctx->Identifier()->getText();
+  ScapeSQL::insert_from_file(file_name, tbl_name);
+  return std::any();
+}
+
 std::any
 ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
   std::string tbl_name = ctx->Identifier()->getText();
