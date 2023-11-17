@@ -1,6 +1,7 @@
 #include <engine/query.h>
 #include <engine/record.h>
 #include <engine/system_manager.h>
+#include <storage/paged_buffer.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 
@@ -27,19 +28,34 @@ inline int eval_records_per_page(int record_len) {
   return records_per_page;
 }
 
-RecordManager::RecordManager(TableManager *table) {
-  filename = table->data_file;
-  record_len = table->record_len;
-  n_pages = table->n_pages;
-  ptr_available = table->ptr_available;
+RecordManager::RecordManager(const std::string &datafile_name, int record_len)
+    : filename(datafile_name), record_len(record_len) {
   fd = FileMapping::get()->open_file(filename);
+  n_pages = 0;
+  ptr_available = -1;
   records_per_page = eval_records_per_page(record_len);
-  table->records_per_page = records_per_page;
   headmask_size = (records_per_page + 63) / 64;
   header_len = BITMAP_START_OFFSET + headmask_size * sizeof(uint64_t);
 }
 
-RecordManager::~RecordManager() {}
+RecordManager::RecordManager(const std::string &datafile_name,
+                             SequentialAccessor &accessor)
+    : filename(datafile_name) {
+  fd = FileMapping::get()->open_file(filename);
+  n_pages = accessor.read<uint32_t>();
+  ptr_available = accessor.read<uint32_t>();
+  record_len = accessor.read<uint32_t>();
+  records_per_page = accessor.read<uint32_t>();
+  headmask_size = (records_per_page + 63) / 64;
+  header_len = BITMAP_START_OFFSET + headmask_size * sizeof(uint64_t);
+}
+
+void RecordManager::serialize(SequentialAccessor &accessor) {
+  accessor.write<uint32_t>(n_pages);
+  accessor.write<uint32_t>(ptr_available);
+  accessor.write<uint32_t>(record_len);
+  accessor.write<uint32_t>(records_per_page);
+}
 
 uint8_t *RecordManager::get_record_ref(int pageid, int slotid) {
   uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, pageid));

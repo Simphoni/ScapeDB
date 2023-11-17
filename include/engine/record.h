@@ -1,10 +1,12 @@
 #pragma once
 
+#include "storage/paged_buffer.h"
 #include <cstring>
 #include <memory>
 #include <vector>
 
 #include <engine/defs.h>
+#include <storage/defs.h>
 
 const int BITMAP_START_OFFSET = 8;
 
@@ -48,10 +50,6 @@ struct FixedBitmap {
   std::vector<int> get_valid_indices() const;
 };
 
-// +---------------------------
-// | next | ???? | headmask |
-// + --------------------------
-
 class RecordManager {
 private:
   friend class TableManager;
@@ -73,15 +71,13 @@ private:
   std::shared_ptr<FixedBitmap> headmask;
 
 public:
-  RecordManager(TableManager *table);
-  ~RecordManager();
+  /// used when creating a table
+  RecordManager(const std::string &datafile_name, int record_len);
+  RecordManager(const std::string &datafile_name, SequentialAccessor &accessor);
 
   int get_fd() const noexcept { return fd; }
   uint8_t *get_record_ref(int pageid, int slotid);
   std::pair<int, int> insert_record(const uint8_t *ptr);
   void erase_record(int pagenum, int slotnum);
-  void update_all_records(
-      std::shared_ptr<TableManager> table,
-      std::vector<SetVariable> &set_variables,
-      std::vector<std::shared_ptr<WhereConstraint>> &where_constraints);
+  void serialize(SequentialAccessor &accessor);
 };
