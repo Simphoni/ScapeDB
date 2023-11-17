@@ -56,7 +56,6 @@ RecordIterator::RecordIterator(
       continue;
     }
     fields_dst.push_back(field);
-    offset_remap.emplace_back(field->pers_offset, field->get_size());
     record_len += field->get_size();
   }
   record_per_page = Config::PAGE_SIZE / record_len;
@@ -66,7 +65,7 @@ RecordIterator::~RecordIterator() {
   FileMapping::get()->close_temp_file(fd_dst);
 }
 
-bool RecordIterator::get_next_valid() {
+bool RecordIterator::get_next_valid_no_check() {
   if (it == valid_records.end()) {
     pagenum_src++;
     while (pagenum_src < record_manager->n_pages) {
@@ -92,6 +91,25 @@ bool RecordIterator::get_next_valid() {
   }
 }
 
+bool RecordIterator::get_next_valid() {
+  bool match = false;
+  do {
+    if (!get_next_valid_no_check()) {
+      return false;
+    }
+    uint8_t *ptr_src = record_manager->get_record_ref(pagenum_src, slotnum_src);
+    match = true;
+    bitmap_t src_bitmap = *(const bitmap_t *)ptr_src;
+    for (auto constraint : constraints) {
+      if (!constraint->check(ptr_src, nullptr)) {
+        match = false;
+        break;
+      }
+    }
+  } while (!match);
+  return true;
+}
+
 int RecordIterator::fill_next_block() {
   n_records = 0;
   pagenum_dst = slotnum_dst = 0;
@@ -99,25 +117,12 @@ int RecordIterator::fill_next_block() {
     return 0;
 
   for (int i = 0; i < record_per_page * QUERY_MAX_PAGES; ++i) {
-    const uint8_t *ptr_src;
-    bitmap_t src_bitmap = 0;
-    bool match = false;
-    do {
-      if (!get_next_valid()) {
-        break;
-      }
-      ptr_src = record_manager->get_record_ref(pagenum_src, slotnum_src);
-      match = true;
-      src_bitmap = *(const bitmap_t *)ptr_src;
-      for (auto constraint : constraints) {
-        if (!constraint->check(ptr_src, nullptr)) {
-          match = false;
-          break;
-        }
-      }
-    } while (!match);
-    if (source_ended)
+    if (!get_next_valid() || source_ended) {
       break;
+    }
+    const uint8_t *ptr_src =
+        record_manager->get_record_ref(pagenum_src, slotnum_src);
+    bitmap_t src_bitmap = *(const bitmap_t *)ptr_src;
 
     int dst_slot = i % record_per_page;
     if (dst_slot == 0) {
@@ -127,7 +132,6 @@ int RecordIterator::fill_next_block() {
     }
     auto ptr_dst = current_dst_page + dst_slot * record_len;
     int offset_dst = sizeof(bitmap_t);
-    src_bitmap = *(const bitmap_t *)ptr_src;
     bitmap_t dst_bitmap = 0;
     for (int i = 0; i < fields_dst.size(); ++i) {
       int index = fields_dst[i]->pers_index;
@@ -152,4 +156,8 @@ void RecordIterator::reset_all() {
   valid_records.clear();
   it = valid_records.begin();
   source_ended = false;
+}
+
+std::pair<int, int> RecordIterator::get_valid_pos() {
+  return std::make_pair(pagenum_src, slotnum_src);
 }

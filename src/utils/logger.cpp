@@ -68,8 +68,9 @@ int fmt_width(std::shared_ptr<Field> f) {
 
 void print(int x, int width) { std::cout << std::setw(width) << x; }
 
-/// a naive workaround to simulate MySQL behavior
 static constexpr int kSingleDigit = std::numeric_limits<float>::digits10;
+
+/// a naive workaround to simulate MySQL behavior
 char *singleToStrTrimmed(float x) {
   static char buf[50];
   int sgn = 1;
@@ -81,7 +82,7 @@ char *singleToStrTrimmed(float x) {
   int slen = strlen(buf);
   std::reverse(buf, buf + slen);
   int it = slen - 1, counter = 0;
-  while (it >= 0) {
+  while (it >= 2) {
     if (buf[it] == '.') {
       --it;
       continue;
@@ -90,7 +91,7 @@ char *singleToStrTrimmed(float x) {
       buf[it] = '0';
     } else {
       ++counter;
-      if (counter == kSingleDigit) {
+      if (counter == kSingleDigit || (counter < kSingleDigit && it == 2)) {
         /// current buffer is xxxx.xxxx
         int lower_val = 0;
         if (it == 0) {

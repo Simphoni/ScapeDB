@@ -139,6 +139,7 @@ public:
   std::shared_ptr<RecordManager> get_record_manager() const noexcept {
     return record_manager;
   }
+  int get_record_len() const noexcept { return record_len; }
   void insert_record(const std::vector<std::any> &values);
   void insert_record(uint8_t *ptr);
   // TODO: implement primary/foreign key constraints check

@@ -16,6 +16,7 @@ struct DataTypeHolderBase {
   virtual void set_default_value(const std::string &s) = 0;
   virtual std::string type_str() = 0;
   virtual std::string val_str() = 0;
+  /// NOTE: returns mxlen + 1 for VARCHAR
   virtual int get_size() const = 0;
   virtual void set_default_value(std::any val) = 0;
   virtual uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) = 0;
@@ -114,5 +115,6 @@ struct Field {
   std::string to_string() const;
 
   std::string type_str() const { return data_meta->type_str(); }
+  /// NOTE: returns mxlen + 1 for VARCHAR
   inline int get_size() const noexcept { return data_meta->get_size(); }
 };

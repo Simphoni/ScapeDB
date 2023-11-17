@@ -245,9 +245,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       has_err = true;
       return;
     }
-    set = [=](bitmap_t *nullstate, char *record) {
-      *nullstate &= ~(1 << column_index);
-    };
+    set = [=](char *record) { *(bitmap_t *)record &= ~(1 << column_index); };
     return;
   }
   if (field->data_meta->type == INT) {
@@ -261,8 +259,8 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       has_err = true;
       return;
     }
-    set = [=](bitmap_t *nullstate, char *record) {
-      *nullstate |= (1 << column_index);
+    set = [=](char *record) {
+      *(bitmap_t *)record |= 1 << column_index;
       *(int *)(record + column_offset) = std::any_cast<int>(value_);
     };
   } else if (field->data_meta->type == FLOAT) {
@@ -276,22 +274,22 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       has_err = true;
       return;
     }
-    set = [=](bitmap_t *nullstate, char *record) {
-      *nullstate |= (1 << column_index);
+    set = [=](char *record) {
+      *(bitmap_t *)record |= 1 << column_index;
       *(float *)(record + column_offset) = std::any_cast<float>(value_);
     };
   } else if (field->data_meta->type == VARCHAR) {
     std::string s;
     int mxlen = field->get_size();
-    if (value_.type() != typeid(std::string())) {
+    if (value_.type() != typeid(std::string)) {
       printf("ERROR: where clause type mismatch (expect VARCHAR)\n");
       has_err = true;
       return;
     }
-    s = std::any_cast<std::string>(value_);
-    set = [=](bitmap_t *nullstate, char *record) {
-      *nullstate |= (1 << column_index);
-      memset(record + column_offset, 0, mxlen + 1);
+    s = std::any_cast<std::string>(std::move(value_));
+    set = [=](char *record) {
+      *(bitmap_t *)record |= 1 << column_index;
+      memset(record + column_offset, 0, mxlen);
       memcpy(record + column_offset, s.data(), s.size());
       record[column_offset + s.size()] = 0;
     };

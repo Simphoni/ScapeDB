@@ -22,13 +22,11 @@ const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
 class Iterator {
 protected:
   IteratorType type;
-  bool source_ended, no_buffer;
+  bool source_ended;
   int fd_dst, fd_src;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   std::vector<std::shared_ptr<Field>> fields_src, fields_dst;
   int record_len, record_per_page;
-  /// for each field_to, its original offset in the record
-  std::vector<std::pair<int, int>> offset_remap;
   int n_records{0};
   int dst_iter{0}, pagenum_dst{0}, slotnum_dst{0};
   uint8_t *current_dst_page;
@@ -47,10 +45,12 @@ public:
   bool all_end() const { return source_ended && dst_iter == n_records; }
   void get(std::vector<uint8_t> &buf);
 
+  virtual bool get_next_valid() = 0;
   /// fill next block of records into buffer and reset block iter
   /// @return number of records filled
   virtual int fill_next_block() = 0;
   virtual void reset_all() = 0;
+  virtual std::pair<int, int> get_valid_pos() = 0;
 };
 
 class RecordIterator : public Iterator {
@@ -70,9 +70,11 @@ public:
                  const std::vector<std::shared_ptr<Field>> &fields_dst);
   RecordIterator();
   ~RecordIterator();
-  bool get_next_valid();
+  bool get_next_valid_no_check();
+  bool get_next_valid() override;
   void reset_all() override;
   int fill_next_block() override;
+  std::pair<int, int> get_valid_pos() override;
 };
 
 class ResultIterator : public Iterator {

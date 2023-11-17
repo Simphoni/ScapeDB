@@ -131,9 +131,28 @@ void update_table(
   // 2. if primary key is changed - check if primary key is referenced/duplicate
   // alters:
   // 1. record file - use get_record_ref()
-  // 2. index file
-  table->get_record_manager()->update_all_records(table, set_variables,
-                                                  where_constraints);
+  // 2. index file - there should always be a primary key
+  static std::vector<uint8_t> buf;
+  buf.resize(table->get_record_len());
+  // TODO: add index iterator to speed up search
+  auto record_manager = table->get_record_manager();
+  auto record_iter = std::make_shared<RecordIterator>(
+      record_manager, where_constraints, table->get_fields(),
+      std::vector<std::shared_ptr<Field>>({}));
+  int modified_rows = 0;
+  while (record_iter->get_next_valid()) {
+    auto [pagenum, slotnum] = record_iter->get_valid_pos();
+    auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
+    memcpy(buf.data(), record_ref, table->get_record_len());
+    for (auto op : set_variables) {
+      op.set((char *)buf.data());
+    }
+    /// check & update index here
+    memcpy(record_ref, buf.data(), table->get_record_len());
+    modified_rows++;
+  }
+  // TODO: uncomment this
+  // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
 }
 
 } // namespace ScapeSQL

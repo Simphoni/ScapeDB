@@ -12,6 +12,7 @@
 class ScapeVisitor : public SQLBaseVisitor {
 private:
   std::shared_ptr<TableManager> insert_into_table;
+  int n_entries_inserted;
   /// for UPDATE, DELETE, SELECT, help parse where clause
   /// used by set_clause, where_and_clause, selector
   std::vector<std::vector<std::shared_ptr<TableManager>>> tables_stack;

@@ -51,7 +51,7 @@ struct ColumnOpValueConstraint : public WhereConstraint {
 };
 
 struct SetVariable {
-  std::function<void(bitmap_t *, char *)> set;
+  std::function<void(char *)> set;
   SetVariable(std::shared_ptr<Field> field, std::any &&value);
 };
 

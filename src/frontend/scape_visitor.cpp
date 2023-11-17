@@ -1,4 +1,3 @@
-#include "engine/defs.h"
 #include <cmath>
 #include <memory>
 #include <tuple>
@@ -89,6 +88,7 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
     has_err = true;
     return std::any();
   }
+  n_entries_inserted = 0;
   insert_into_table = db->get_table_manager(tbl_name);
   if (insert_into_table == nullptr) {
     printf("ERROR: TABLE %s not found\n", tbl_name.data());
@@ -98,6 +98,10 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
   ctx->value_lists()->accept(this);
   /// reset table data so that (column IN value_list) can be parse correctly
   insert_into_table = nullptr;
+  if (!has_err) {
+    // TODO: uncomment this line
+    // Logger::tabulate({"rows", std::to_string(n_entries_inserted)}, 2, 1);
+  }
   return true;
 }
 
@@ -149,7 +153,7 @@ ScapeVisitor::visitSelect_table_(SQLParser::Select_table_Context *ctx) {
   if (!ret.has_value()) {
     return std::any();
   }
-  auto ptr = std::any_cast<std::shared_ptr<QueryPlanner>>(ret);
+  auto ptr = std::any_cast<std::shared_ptr<QueryPlanner>>(std::move(ret));
   if (!has_err) {
     Logger::tabulate(ptr);
   }
@@ -173,7 +177,7 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
     if (table == nullptr) {
       printf("ERROR: table %s not found\n", tab_name.data());
       has_err = true;
-      return false;
+      return std::any();
     }
     selected_tables.push_back(table);
   }
@@ -264,12 +268,11 @@ std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
   for (auto val : ctx->value()) {
     vals.push_back(val->accept(this));
   }
-  if (insert_into_table == nullptr) {
-    return vals;
-  } else {
+  if (insert_into_table != nullptr) {
     insert_into_table->insert_record(vals);
-    return std::any();
+    n_entries_inserted++;
   }
+  return vals;
 }
 
 /// Identifier EqualOrAssign value (',' Identifier EqualOrAssign value)*
