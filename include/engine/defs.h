@@ -85,11 +85,11 @@ enum ConstraintType : uint8_t {
 
 enum Operator : uint8_t {
   EQ = 1,
-  LT = 2,
-  GT = 4,
-  NE = 4 | 2,
-  LE = 2 | 1,
-  GE = 4 | 1,
+  LT,
+  GT,
+  NE,
+  LE,
+  GE,
 };
 
 Operator str2op(const std::string &s);

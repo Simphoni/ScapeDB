@@ -21,8 +21,6 @@ private:
   std::map<unified_id_t, std::shared_ptr<DatabaseManager>> dbs;
   std::unordered_map<std::string, unified_id_t> name2id;
 
-  bool dirty{false};
-
   GlobalManager();
   GlobalManager(const GlobalManager &) = delete;
 

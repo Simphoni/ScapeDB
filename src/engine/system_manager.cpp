@@ -51,19 +51,16 @@ void GlobalManager::create_db(const std::string &s) {
   unified_id_t id = get_unified_id();
   dbs.insert(std::make_pair(id, DatabaseManager::build(s, false)));
   name2id.insert(std::make_pair(s, id));
-  dirty = true;
 }
 
 void GlobalManager::drop_db(const std::string &s) {
   if (!name2id.contains(s))
     return;
-  // TODO: unset dirty to avoid unnecessary write
   unified_id_t id = name2id[s];
   auto it = dbs.find(id);
   it->second->purge();
   dbs.erase(it->first);
   name2id.erase(s);
-  dirty = true;
 }
 
 unified_id_t GlobalManager::get_db_id(const std::string &s) const {

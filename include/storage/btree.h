@@ -3,38 +3,50 @@
 #include <cstdint>
 #include <vector>
 
-#include <storage/storage.h>
+#include <engine/defs.h>
+#include <storage/defs.h>
 
 enum NodeType : uint8_t {
   INTERNAL = 0,
   LEAF = 1,
 };
 
+struct BPlusQueryResult {
+  int pagenum;
+  int slotnum;
+};
+
 struct BPlusNodeMeta {
   int left_sibling;  // pagenum
   int right_sibling; // pagenum
   int size;
+  int next_empty;
   NodeType type;
 };
 
-const int BTREE_PAGE_DATA_START_OFFSET_BYTES = sizeof(BPlusNodeMeta);
-
-class BPlusTreePageReader {
-private:
-  int pagenum;
-  uint8_t *slice;
-
-public:
-  BPlusNodeMeta *meta;
-  BPlusTreePageReader(int fd, int pagenum) : pagenum(pagenum) {
-    slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum));
-    meta = (BPlusNodeMeta *)slice;
-  }
-};
-
+/// keys are stored seperate from data
+/// for internal nodes, data equals to
+/// - the corresponding pagenum
+/// for leaf nodes, data equals to
+/// - record location(page, slot), serves as a unique identifier for a record
+/// - corresponding record
+/// an internal node matches like [ key[i], key[i+1] )
 class BPlusTree {
 private:
-  int fd, root_pagenum;
-  int key_num;    /// a composite key consists of INTs
-  int entry_size; /// key size + pagenum + slotnum
+  int fd, pagenum_root;
+  int key_num;      /// a composite key consists of key_num INTs
+  int internal_cap; /// key size + pagenum
+  int leaf_cap;     /// key size + record size + record(pagenum, slotnum)
+
+  /// find largest index i such that a[i] </<= key
+  /// find smallest index i such that a[i] >/>= key
+  /// return i if a[i] == key && op == EQ
+  /// use <= when querying internal nodes
+  int compare_key(const int *a, const int *b) const;
+
+  int bin_search(int *a, int len, const std::vector<int> &key,
+                 Operator op) const;
+
+public:
+  int precise_match(const std::vector<int> &key) const;
 };
