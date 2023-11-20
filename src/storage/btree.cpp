@@ -1,8 +1,8 @@
-#include "utils/config.h"
 #include <cstring>
 
 #include <storage/btree.h>
 #include <storage/paged_buffer.h>
+#include <utils/config.h>
 
 int BPlusTree::compare_key(const int *a, const int *b) const {
   for (int i = 0; i < key_num; ++i) {
@@ -80,49 +80,252 @@ BPlusTree::precise_match(const std::vector<int> &key) const {
       return (BPlusQueryResult){pagenum_cur, idx,
                                 ((uint8_t *)data) + leaf_data_len * idx};
     } else {
-      int idx = bin_search(keys, meta->size, key, Operator::LE) + 1;
+      int idx = bin_search(keys, meta->size, key, Operator::LE);
       pagenum_cur = data[idx];
     }
   }
 }
 
-uint8_t bbuf[Config::PAGE_SIZE];
+uint8_t abuf[Config::PAGE_SIZE], bbuf[Config::PAGE_SIZE];
 
-void BPlusTree::insert(const std::vector<int> &key, int rec_page, int rec_slot,
-                       const uint8_t *record) {
+void native_array_insert(uint8_t *ptr, int sz, int offset, int elem_width,
+                         uint8_t *buf) {
+  if (sz <= offset)
+    return;
+  memcpy(buf, ptr + offset * elem_width, (sz - offset) * elem_width);
+  memcpy(ptr + (offset + 1) * elem_width, buf, (sz - offset) * elem_width);
+}
+
+void BPlusTree::leaf_insert(uint8_t *slice, const std::vector<int> &key,
+                            const uint8_t *record) {
+  BPlusNodeMeta *meta;
+  int *keys;
+  uint8_t *data;
+  prepare_from_slice(slice, meta, keys, data);
+  assert(meta->size < leaf_max);
+  int pos = bin_search(keys, meta->size, key, Operator::GT);
+
+  native_array_insert((uint8_t *)keys, meta->size, pos, key_num * sizeof(int),
+                      bbuf);
+  memcpy(keys + pos * key_num, key.data(), key_num * sizeof(int));
+
+  native_array_insert(data, meta->size, pos, leaf_data_len, bbuf);
+  memcpy(data + pos * leaf_data_len, record, leaf_data_len);
+  ++meta->size;
+}
+
+void BPlusTree::leaf_split(int pagenum, uint8_t *slice,
+                           std::vector<int> &key_pushup, int &val_pushup,
+                           const uint8_t *record) {
+  BPlusNodeMeta *meta, *nwmeta;
+  int *keys, *nwkeys;
+  uint8_t *data, *nwdata;
+  prepare_from_slice(slice, meta, keys, data);
+  int pos = bin_search((int *)(slice + sizeof(BPlusNodeMeta)), leaf_max,
+                       key_pushup, Operator::GT);
+  int lsize = (leaf_max + 1) / 2;
+  if (pos < lsize) {
+    lsize--; /// still pos <= lsize
+  }
+  int rsize = leaf_max - lsize;
+
+  int nwpage = forest->alloc_page();
+  uint8_t *nwslice = PagedBuffer::get()->read_file(std::make_pair(fd, nwpage));
+  prepare_from_slice(nwslice, nwmeta, nwkeys, nwdata);
+
+  memcpy(nwkeys, (int *)(slice + sizeof(BPlusNodeMeta)) + lsize * key_num,
+         rsize * key_num * sizeof(int));
+  memcpy(nwdata,
+         (uint8_t *)(slice + sizeof(BPlusNodeMeta)) + lsize * leaf_data_len,
+         rsize * leaf_data_len);
+  *nwmeta =
+      (BPlusNodeMeta){pagenum, meta->right_sibling, rsize, -1, NodeType::LEAF};
+  meta->right_sibling = nwpage;
+  meta->size = lsize;
+  if (pos <= lsize) {
+    leaf_insert(slice, key_pushup, record);
+  } else {
+    leaf_insert(nwslice, key_pushup, record);
+  }
+  memcpy(key_pushup.data(), nwkeys, key_num * sizeof(int));
+  val_pushup = nwpage;
+}
+
+void BPlusTree::internal_insert(uint8_t *slice, const std::vector<int> key,
+                                int val) {
+  BPlusNodeMeta *meta;
+  int *keys;
+  uint8_t *data;
+  prepare_from_slice(slice, meta, keys, data);
+  int pos = bin_search(keys, meta->size, key, Operator::GT);
+
+  native_array_insert((uint8_t *)keys, meta->size, pos, sizeof(int) * key_num,
+                      bbuf);
+  memcpy(keys + pos * key_num, key.data(), sizeof(int) * key_num);
+  native_array_insert(data, meta->size, pos + 1, sizeof(int), bbuf);
+  ((int *)data)[pos + 1] = val;
+}
+
+void BPlusTree::internal_split(int pagenum, uint8_t *slice,
+                               std::vector<int> &key_pushup, int &val_pushup) {
+  BPlusNodeMeta *meta, *nwmeta;
+  int *keys, *nwkeys;
+  uint8_t *data, *nwdata;
+  prepare_from_slice(slice, meta, keys, data);
+
+  int pos = bin_search(keys, internal_max, key_pushup, Operator::GT);
+  int lsize = (internal_max + 1) / 2;
+  if (pos < lsize) {
+    lsize--;
+  }
+  int rsize = internal_max - 1 - lsize;
+
+  int nwpage = forest->alloc_page();
+  uint8_t *nwslice = PagedBuffer::get()->read_file(std::make_pair(fd, nwpage));
+  prepare_from_slice(nwslice, nwmeta, nwkeys, nwdata);
+
+  /// children: (lsize + 1) + (rsize + 1) = size + 1
+  memcpy(nwkeys, keys + (lsize + 1) * key_num, rsize * key_num * sizeof(int));
+  memcpy(nwdata, data + (lsize + 1) * sizeof(int), (rsize + 1) * sizeof(int));
+  nwmeta->size = rsize;
+  nwmeta->next_empty = -1;
+  nwmeta->type = NodeType::INTERNAL;
+  meta->size = lsize;
+  if (pos <= lsize) {
+    internal_insert(slice, key_pushup, val_pushup);
+  } else {
+    internal_insert(nwslice, key_pushup, val_pushup);
+  }
+  memcpy(key_pushup.data(), nwkeys, key_num * sizeof(int));
+  val_pushup = nwpage;
+}
+
+void BPlusTree::insert(const std::vector<int> &key, const uint8_t *record) {
   int pagenum_cur = pagenum_root;
+  std::vector<int> stack;
   uint8_t *slice, *data;
   BPlusNodeMeta *meta;
   int *keys;
   while (true) {
     slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
-    keys = (int *)(slice + sizeof(BPlusNodeMeta));
-    meta = (BPlusNodeMeta *)slice;
-    data = (uint8_t *)(keys + key_num * get_cap(meta->type));
+    prepare_from_slice(slice, meta, keys, data);
     if (meta->type == NodeType::LEAF) {
       break;
     } else {
-      int idx = bin_search(keys, meta->size, key, Operator::LE) + 1;
+      int idx = bin_search(keys, meta->size, key, Operator::LE);
+      stack.push_back(pagenum_cur);
       pagenum_cur = ((int *)data)[idx];
     }
   }
-  if (meta->size < leaf_max) {
-    int sz = meta->size;
-    ++meta->size;
-    int pos = bin_search(keys, meta->size, key, Operator::LE) + 1;
-    memcpy(bbuf, keys + pos * key_num, (sz - pos) * key_num * sizeof(int));
-    memcpy(keys + (pos + 1) * key_num, bbuf,
-           (sz - pos) * key_num * sizeof(int));
-    memcpy(keys + pos * key_num, key.data(), key_num * sizeof(int));
-    memcpy(bbuf, data + pos * leaf_data_len, (sz - pos) * leaf_data_len);
-    memcpy(data + (pos + 1) * leaf_data_len, bbuf, (sz - pos) * leaf_data_len);
-    ((int *)(data + pos * leaf_data_len))[0] = rec_page;
-    ((int *)(data + pos * leaf_data_len))[1] = rec_slot;
-    memcpy(data + pos * leaf_data_len + 2 * sizeof(int), record, leaf_data_len);
-    return;
-  }
-  /// (key_buf: val) is the new seperator to the parent
-  static std::vector<int> key_pushup;
+  /// (key_pushup: val_pushup) is the new seperator passed to the parent
+  std::vector<int> key_pushup;
   int val_pushup = -1;
-  key_pushup.resize(key_num);
+
+  if (meta->size < leaf_max) {
+    leaf_insert(slice, key, record);
+    return;
+  } else {
+    key_pushup = key;
+    leaf_split(pagenum_cur, slice, key_pushup, val_pushup, record);
+  }
+  while (true) {
+    /// slice is holding data at pagenum_cur(from last iter or leaf)
+    if (stack.size() == 0) {
+      assert(pagenum_cur == pagenum_root);
+      int nwpage = forest->alloc_page();
+      slice = PagedBuffer::get()->read_file(std::make_pair(fd, nwpage));
+      prepare_from_slice(slice, meta, keys, data);
+      memcpy(keys, key_pushup.data(), key_num * sizeof(int));
+      ((int *)data)[0] = pagenum_cur;
+      ((int *)data)[1] = val_pushup;
+      meta->size = 1;
+      meta->next_empty = -1;
+      meta->type = NodeType::INTERNAL;
+      pagenum_root = nwpage;
+      return;
+    }
+    pagenum_cur = stack.back();
+    stack.pop_back();
+    slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+    prepare_from_slice(slice, meta, keys, data);
+    if (meta->size < internal_max) {
+      internal_insert(slice, key, val_pushup);
+      return;
+    }
+    internal_split(pagenum_cur, slice, key_pushup, val_pushup);
+  }
+}
+
+int BPlusForest::alloc_page() {
+  if (ptr_available == -1) {
+    return n_pages++;
+  } else {
+    int ret = ptr_available;
+    uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, ret));
+    ptr_available = ((BPlusNodeMeta *)slice)->next_empty;
+    return ret;
+  }
+}
+
+void BPlusForest::free_page(int page) {
+  uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, page));
+  ((BPlusNodeMeta *)slice)->next_empty = ptr_available;
+  ptr_available = page;
+}
+
+void BPlusTree::serialize(SequentialAccessor &accessor) const {
+  accessor.write<uint32_t>(pagenum_root);
+  accessor.write<uint32_t>(key_num);
+  accessor.write<uint32_t>(leaf_data_len);
+  accessor.write<uint32_t>(internal_max);
+  accessor.write<uint32_t>(leaf_max);
+}
+
+void BPlusForest::serialize(SequentialAccessor &accessor) const {
+  accessor.write<uint32_t>(n_pages);
+  accessor.write<uint32_t>(ptr_available);
+  accessor.write<uint32_t>(trees.size());
+  for (auto &tree : trees) {
+    tree->serialize(accessor);
+  }
+}
+
+BPlusTree::BPlusTree(int fd, BPlusForest *forest, SequentialAccessor &accessor)
+    : fd(fd), forest(forest) {
+  pagenum_root = accessor.read<uint32_t>();
+  key_num = accessor.read<uint32_t>();
+  leaf_data_len = accessor.read<uint32_t>();
+  internal_max = accessor.read<uint32_t>();
+  leaf_max = accessor.read<uint32_t>();
+}
+
+BPlusTree::BPlusTree(int fd, BPlusForest *forest, int pagenum_root, int key_num,
+                     int record_len)
+    : fd(fd), forest(forest), pagenum_root(pagenum_root), key_num(key_num),
+      leaf_data_len(record_len) {
+  internal_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
+                     (sizeof(int) * (key_num + 1)) -
+                 1;
+  leaf_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
+             (sizeof(int) * key_num + leaf_data_len);
+}
+
+BPlusForest::BPlusForest(int fd, SequentialAccessor &accessor) : fd(fd) {
+  n_pages = accessor.read<uint32_t>();
+  ptr_available = accessor.read<uint32_t>();
+  int n_trees = accessor.read<uint32_t>();
+  trees.resize(n_trees);
+  for (int i = 0; i < n_trees; ++i) {
+    trees[i] = std::make_shared<BPlusTree>(fd, this, accessor);
+  }
+}
+
+void BPlusForest::create_tree(int key_num, int record_len) {
+  int rt = n_pages++;
+  uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, rt));
+  BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
+  meta->reset();
+  meta->type = NodeType::LEAF;
+  trees.push_back(
+      std::make_shared<BPlusTree>(fd, this, rt, key_num, record_len));
 }

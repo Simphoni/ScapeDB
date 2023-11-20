@@ -1,5 +1,6 @@
 #pragma once
 
+#include "storage/paged_buffer.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -8,6 +9,8 @@
 #include <engine/defs.h>
 #include <storage/defs.h>
 #include <utils/config.h>
+
+class BPlusForest;
 
 enum NodeType : uint8_t {
   INTERNAL = 0,
@@ -21,7 +24,6 @@ struct BPlusQueryResult {
 };
 
 struct BPlusNodeMeta {
-  int parent; // pagenum
   /// for first child, its change in key will affect its parent's key.
   /// when it goes below minimum capacity, it borrows from its right sibling
   int left_sibling;  // pagenum
@@ -29,13 +31,12 @@ struct BPlusNodeMeta {
   int size;
   int next_empty;
   NodeType type;
-  bool is_first_child;
+
   void reset() {
-    parent = left_sibling = right_sibling = -1;
+    left_sibling = right_sibling = -1;
     size = 0;
     next_empty = -1;
     type = NodeType::INTERNAL;
-    is_first_child = false;
   }
 };
 
@@ -53,9 +54,16 @@ private:
   int key_num;      /// a composite key consists of key_num INTs
   int internal_max; /// key size + pagenum
   int leaf_max;     /// key size + record size + record(pagenum, slotnum)
-  int record_len;
+  int const internal_data_len = sizeof(int);
   int leaf_data_len;
+  BPlusForest *forest;
 
+  void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
+                          uint8_t *&data) const {
+    meta = (BPlusNodeMeta *)slice;
+    keys = (int *)(slice + sizeof(BPlusNodeMeta));
+    data = (uint8_t *)(keys + key_num * get_cap(meta->type));
+  }
   int compare_key(const int *a, const int *b) const;
   /// find largest index i such that a[i] </<= key.
   /// find smallest index i such that a[i] >/>= key.
@@ -63,20 +71,18 @@ private:
   /// use <= when querying internal nodes.
   int bin_search(int *a, int len, const std::vector<int> &key,
                  Operator op) const;
+  void leaf_insert(uint8_t *slice, const std::vector<int> &key,
+                   const uint8_t *record);
+  void leaf_split(int pagenum, uint8_t *slice, std::vector<int> &key_pushup,
+                  int &val_pushup, const uint8_t *record);
+  void internal_insert(uint8_t *slice, const std::vector<int> key, int val);
+  void internal_split(int pagenum, uint8_t *slice, std::vector<int> &key_pushup,
+                      int &val_pushup);
 
 public:
-  BPlusTree(int fd, int pagenum_root, int key_num, int record_len)
-      : fd(fd), pagenum_root(pagenum_root), key_num(key_num),
-        record_len(record_len) {
-    leaf_data_len = record_len + sizeof(int) * 2;
-    /// (key): int
-    internal_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta) - sizeof(int)) /
-                   (sizeof(int) * (key_num + 1));
-    /// (key): leaf_data
-    leaf_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
-               (sizeof(int) * key_num + leaf_data_len);
-  }
-  BPlusTree(int fd, SequentialAccessor &accessor);
+  BPlusTree(int fd, BPlusForest *forest, int pagenum_root, int key_num,
+            int record_len);
+  BPlusTree(int fd, BPlusForest *forest, SequentialAccessor &accessor);
 
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
@@ -85,16 +91,15 @@ public:
   std::optional<BPlusQueryResult>
   precise_match(const std::vector<int> &key) const;
 
-  void insert(const std::vector<int> &key, int rec_page, int rec_slot,
-              const uint8_t *record);
+  void insert(const std::vector<int> &key, const uint8_t *record);
 
-  void serialize();
+  void serialize(SequentialAccessor &accessor) const;
 };
 
 /// manage multiple BPlusTree in a single file
 class BPlusForest {
 private:
-  int fd, n_pages, ptr_available;
+  int fd, n_pages{0}, ptr_available{-1};
   std::vector<std::shared_ptr<BPlusTree>> trees;
 
 public:
@@ -103,7 +108,8 @@ public:
   /// build from file
   BPlusForest(int fd, SequentialAccessor &accessor);
   ~BPlusForest() { trees.clear(); }
-  void serialize();
+  void serialize(SequentialAccessor &accessor) const;
   int alloc_page();
-  int free_page();
+  void free_page(int page);
+  void create_tree(int key_num, int record_len);
 };
