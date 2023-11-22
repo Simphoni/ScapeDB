@@ -51,7 +51,7 @@ void use_db(const std::string &s) {
 }
 
 void show_tables() {
-  if (ScapeFrontend::get()->get_current_db_id() == 0) {
+  if (ScapeFrontend::get()->get_current_db_manager() == nullptr) {
     printf("ERROR: no database selected\n");
     return;
   }

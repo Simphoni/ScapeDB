@@ -40,7 +40,7 @@ if(BUILD_TEST)
   foreach(srcfile ${test_src})
     get_filename_component(testname ${srcfile} NAME_WE)
     add_executable(${testname} ${srcfile})
-    target_link_libraries(${testname} PRIVATE gtest_main sql_parser
-                                              scape_engine)
+    # library order matters
+    target_link_libraries(${testname} PRIVATE gtest_main scape_engine sql_parser)
   endforeach(srcfile ${test_src})
 endif()

@@ -9,12 +9,14 @@
 #include <engine/scape_sql.h>
 #include <frontend/frontend.h>
 #include <utils/config.h>
+#include <utils/misc.h>
 
 std::string const prompt = "scapedb";
 
 void capture_keyboard_interrupt() {
   signal(SIGINT, [](int) {
     std::cout << "Forced exit due to SIGINT, files can be broken." << std::endl;
+    manual_cleanup();
     std::exit(0);
   });
 }
@@ -74,5 +76,6 @@ int main(int argc, char **argv) {
         std::cout << std::string(_prompt.size(), ' ') + "> ";
     }
   }
+  manual_cleanup();
   return 0;
 }

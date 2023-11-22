@@ -32,6 +32,7 @@ public:
     }
     return instance;
   }
+  static void manual_cleanup() { instance = nullptr; }
 
   void create_db(const std::string &s);
   void drop_db(const std::string &s);

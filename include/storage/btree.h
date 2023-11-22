@@ -64,6 +64,12 @@ private:
     keys = (int *)(slice + sizeof(BPlusNodeMeta));
     data = (uint8_t *)(keys + key_num * get_cap(meta->type));
   }
+  void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
+                          uint8_t *&data, NodeType type) const {
+    meta = (BPlusNodeMeta *)slice;
+    keys = (int *)(slice + sizeof(BPlusNodeMeta));
+    data = (uint8_t *)(keys + key_num * get_cap(type));
+  }
   int compare_key(const int *a, const int *b) const;
   /// find largest index i such that a[i] </<= key.
   /// find smallest index i such that a[i] >/>= key.
@@ -94,6 +100,8 @@ public:
   void insert(const std::vector<int> &key, const uint8_t *record);
 
   void serialize(SequentialAccessor &accessor) const;
+
+  void print() const;
 };
 
 /// manage multiple BPlusTree in a single file
@@ -108,8 +116,11 @@ public:
   /// build from file
   BPlusForest(int fd, SequentialAccessor &accessor);
   ~BPlusForest() { trees.clear(); }
+
   void serialize(SequentialAccessor &accessor) const;
   int alloc_page();
   void free_page(int page);
-  void create_tree(int key_num, int record_len);
+  std::shared_ptr<BPlusTree> create_tree(int key_num, int record_len);
+
+  int get_pages_number() { return n_pages; }
 };

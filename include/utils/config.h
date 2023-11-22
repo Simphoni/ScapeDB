@@ -1,7 +1,4 @@
 #pragma once
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
 #include <cassert>
 #include <memory>
 #include <string>
@@ -45,5 +42,7 @@ public:
     }
     return instance;
   }
+  static void manual_cleanup() { instance = nullptr; }
+
   void parse(argparse::ArgumentParser &parser);
 };
