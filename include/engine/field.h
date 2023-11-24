@@ -21,7 +21,7 @@ struct DataTypeHolderBase {
   virtual int get_size() const = 0;
   virtual void set_default_value(std::any val) = 0;
   virtual uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) = 0;
-  virtual void serealize(SequentialAccessor &s) const = 0;
+  virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
 
   static std::shared_ptr<DataTypeHolderBase> build(const std::string &s);
@@ -41,7 +41,7 @@ struct IntHolder : public DataTypeHolderBase {
   int get_size() const override { return sizeof(int); }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
-  void serealize(SequentialAccessor &s) const override;
+  void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
 
@@ -58,7 +58,7 @@ struct FloatHolder : public DataTypeHolderBase {
   int get_size() const override { return sizeof(double); }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
-  void serealize(SequentialAccessor &s) const override;
+  void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
 
@@ -78,7 +78,7 @@ struct VarcharHolder : public DataTypeHolderBase {
   int get_size() const override { return mxlen + 1; /*fixed length*/ }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
-  void serealize(SequentialAccessor &s) const override;
+  void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
 
@@ -88,13 +88,19 @@ struct DummyHolder : public DataTypeHolderBase {
   std::string type_str() override { return "DUMMY"; }
   std::string val_str() override { return "[]"; }
   int get_size() const override { return 0; }
+  void set_default_value(const std::string &s) override {}
   void set_default_value(std::any val) override {}
+  uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override {
+    return ptr;
+  }
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override {}
 };
 
 struct KeyTypeHolderBase {
   KeyType type;
 
-  virtual void serealize(SequentialAccessor &s) const = 0;
+  virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
 
   static std::shared_ptr<KeyTypeHolderBase> build(KeyType type);
@@ -102,16 +108,17 @@ struct KeyTypeHolderBase {
 
 struct NormalHolder : public KeyTypeHolderBase {
   NormalHolder() { type = NORMAL; }
-  void serealize(SequentialAccessor &s) const override;
+  void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
 
 struct PrimaryHolder : public KeyTypeHolderBase {
   std::vector<std::string> field_names;
   std::vector<std::shared_ptr<Field>> fields;
+
   PrimaryHolder() { type = PRIMARY; }
-  void serealize(SequentialAccessor &s) const override;
-  void deserialize(SequentialAccessor &s) override;
+  void serialize(SequentialAccessor &s) const override {}
+  void deserialize(SequentialAccessor &s) override {}
   void build(std::shared_ptr<TableManager> table) {}
 };
 
@@ -121,14 +128,16 @@ struct ForeignHolder : public KeyTypeHolderBase {
   std::string ref_table_name;
   std::vector<std::string> ref_field_names;
   std::vector<std::shared_ptr<Field>> ref_fields;
+
   ForeignHolder() { type = FOREIGN; }
-  void serealize(SequentialAccessor &s) const override;
-  void deserialize(SequentialAccessor &s) override;
+  void serialize(SequentialAccessor &s) const override {}
+  void deserialize(SequentialAccessor &s) override {}
   void build(std::shared_ptr<TableManager> table,
              std::shared_ptr<DatabaseManager> db);
 };
 
 struct Field {
+  bool random_name{false};
   std::string field_name;
   std::shared_ptr<DataTypeHolderBase> dtype_meta;
   std::shared_ptr<KeyTypeHolderBase> key_meta;

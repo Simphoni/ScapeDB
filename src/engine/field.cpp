@@ -32,6 +32,8 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
     return std::make_shared<FloatHolder>();
   case VARCHAR:
     return std::make_shared<VarcharHolder>();
+  case DUMMY:
+    return std::make_shared<DummyHolder>();
   default:
     assert(false);
   }
@@ -69,7 +71,7 @@ uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + 4;
 }
 
-void IntHolder::serealize(SequentialAccessor &s) const {
+void IntHolder::serialize(SequentialAccessor &s) const {
   s.write_byte(INT);
   s.write_byte(has_default_val);
   if (has_default_val) {
@@ -120,7 +122,7 @@ uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + 4;
 }
 
-void FloatHolder::serealize(SequentialAccessor &s) const {
+void FloatHolder::serialize(SequentialAccessor &s) const {
   s.write_byte(FLOAT);
   s.write_byte(has_default_val);
   if (has_default_val) {
@@ -174,7 +176,7 @@ uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + mxlen + 1;
 }
 
-void VarcharHolder::serealize(SequentialAccessor &s) const {
+void VarcharHolder::serialize(SequentialAccessor &s) const {
   s.write_byte(VARCHAR);
   s.write<uint32_t>(mxlen);
   s.write_byte(has_default_val);
@@ -191,16 +193,24 @@ void VarcharHolder::deserialize(SequentialAccessor &s) {
   }
 }
 
+void DummyHolder::serialize(SequentialAccessor &s) const {
+  s.write_byte(DataType::DUMMY);
+}
+
 std::shared_ptr<KeyTypeHolderBase> KeyTypeHolderBase::build(KeyType type) {
   switch (type) {
-  case NORMAL:
+  case KeyType::NORMAL:
     return std::make_shared<NormalHolder>();
+  case KeyType::PRIMARY:
+    return std::make_shared<PrimaryHolder>();
+  case KeyType::FOREIGN:
+    return std::make_shared<ForeignHolder>();
   default:
     assert(false);
   }
 }
 
-void NormalHolder::serealize(SequentialAccessor &s) const {
+void NormalHolder::serialize(SequentialAccessor &s) const {
   s.write_byte(NORMAL);
 }
 
@@ -209,8 +219,8 @@ void NormalHolder::deserialize(SequentialAccessor &s) {}
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
   s.write_byte(notnull);
-  dtype_meta->serealize(s);
-  key_meta->serealize(s);
+  dtype_meta->serialize(s);
+  key_meta->serialize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {

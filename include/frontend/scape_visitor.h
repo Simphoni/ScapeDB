@@ -57,15 +57,11 @@ public:
 
   std::any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;
 
-  virtual std::any
-  visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) override {
-    return visitChildren(ctx);
-  }
+  std::any
+  visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) override;
 
-  virtual std::any
-  visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) override {
-    return visitChildren(ctx);
-  }
+  std::any
+  visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) override;
 
   std::any visitValue(SQLParser::ValueContext *ctx) override;
 

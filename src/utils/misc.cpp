@@ -1,7 +1,6 @@
-#include "storage/file_mapping.h"
-#include "storage/paged_buffer.h"
 #include <filesystem>
 #include <fstream>
+#include <random>
 
 #include <engine/system_manager.h>
 #include <frontend/frontend.h>
@@ -36,4 +35,21 @@ void manual_cleanup() {
   PagedBuffer::manual_cleanup();
   FileMapping::manual_cleanup();
   Config::manual_cleanup();
+}
+
+std::mt19937 mt_rng(std::random_device{}());
+
+std::string generate_random_string() {
+  std::string ret;
+  ret.reserve(10);
+  for (int i = 0; i < 10; ++i) {
+    int x = mt_rng() % 62;
+    if (x < 26)
+      ret.push_back('A' + x);
+    else if (x < 52)
+      ret.push_back('a' + x - 26);
+    else
+      ret.push_back('0' + x - 52);
+  }
+  return ret;
 }

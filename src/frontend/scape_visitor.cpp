@@ -9,6 +9,7 @@
 #include <frontend/scape_visitor.h>
 #include <storage/storage.h>
 #include <utils/logger.h>
+#include <utils/misc.h>
 
 std::any ScapeVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
   return visitChildren(ctx);
@@ -290,6 +291,52 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
       data_meta->set_default_value(val);
     }
   }
+  return field;
+}
+
+/// 'PRIMARY' 'KEY' (Identifier)? '(' identifiers ')'
+std::any
+ScapeVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
+  std::shared_ptr<Field> field = std::make_shared<Field>(get_unified_id());
+  field->dtype_meta = std::make_shared<DummyHolder>();
+  field->key_meta = KeyTypeHolderBase::build(KeyType::PRIMARY);
+  auto primary = std::dynamic_pointer_cast<PrimaryHolder>(field->key_meta);
+  primary->field_names =
+      std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
+  if (ctx->Identifier() != nullptr) {
+    field->field_name = ctx->Identifier()->getText();
+  } else {
+    field->random_name = true;
+    field->field_name = generate_random_string();
+  }
+  return field;
+}
+
+/// 'FOREIGN' 'KEY' (Identifier)? '(' identifiers ')' 'REFERENCES' Identifier
+/// '(' identifiers ')'
+std::any
+ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
+  puts("I AM HERE");
+  std::shared_ptr<Field> field = std::make_shared<Field>(get_unified_id());
+  field->dtype_meta = std::make_shared<DummyHolder>();
+  field->key_meta = KeyTypeHolderBase::build(KeyType::FOREIGN);
+  auto foreign = std::dynamic_pointer_cast<ForeignHolder>(field->key_meta);
+  foreign->ref_table_name = ctx->Identifier().back()->getText();
+  if (ctx->Identifier().size() == 2) {
+    field->field_name = ctx->Identifier().front()->getText();
+  } else {
+    field->random_name = true;
+    field->field_name = generate_random_string();
+  }
+  if (ctx->identifiers().size() != 2) {
+    has_err = true;
+    puts("ERROR: must specify both foreign key and reference key");
+    return std::any();
+  }
+  foreign->field_names = std::any_cast<std::vector<std::string>>(
+      ctx->identifiers(0)->accept(this));
+  foreign->ref_field_names = std::any_cast<std::vector<std::string>>(
+      ctx->identifiers(1)->accept(this));
   return field;
 }
 
