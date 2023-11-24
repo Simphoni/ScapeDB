@@ -107,7 +107,6 @@ void BPlusTree::leaf_insert(uint8_t *slice, const std::vector<int> &key,
   int *keys;
   uint8_t *data;
   prepare_from_slice(slice, meta, keys, data);
-  assert(meta->size < leaf_max);
   int pos = bin_search(keys, meta->size, key, Operator::GT);
 
   page_array_insert(NodeType::LEAF, keys, data, meta->size, pos);
@@ -182,10 +181,6 @@ void BPlusTree::internal_split(int pagenum, uint8_t *slice,
   if (pos < lsize) {
     lsize--;
   }
-#ifndef NDEBUG
-  assert(pos > 0);
-  assert(lsize > 0);
-#endif
   int rsize = internal_max - lsize;
 
   memcpy(nwkeys, keys + lsize * key_num, rsize * key_num * sizeof(int));
@@ -223,20 +218,6 @@ void BPlusTree::insert(const std::vector<int> &key, const uint8_t *record) {
   /// (key_pushup: val_pushup) is the new seperator passed to the parent
   std::vector<int> key_pushup;
   int val_pushup = -1;
-
-#ifndef NDEBUG
-  if (meta->size > 0 && compare_key(key.data(), keys) == -1) {
-    printf("is_leaf=%d\n", meta->type == LEAF);
-    for (int i = 0; i < key_num; i++)
-      printf("%d ", key[i]);
-    puts("");
-    puts("");
-    for (int i = 0; i < key_num; i++)
-      printf("%d ", keys[i]);
-    puts("");
-    assert(0);
-  }
-#endif
 
   if (meta->size < leaf_max) {
     leaf_insert(slice, key, record);
@@ -376,6 +357,7 @@ bool BPlusTree::erase(const std::vector<int> &key) {
           break;
         }
       } else {
+        assert(meta->size + smeta->size <= get_cap(type));
         if (kth_cur > 0) {
           std::swap(kth_cur, kth_sibling);
           std::swap(pagenum_cur, pagenum_sibling);
