@@ -55,15 +55,18 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   if (ctx->field_list() == nullptr) {
     has_err = true;
     printf("ERROR: field list missing\n");
-    return nullptr;
+    return std::any();
   }
   std::any fields = ctx->field_list()->accept(this);
-  if (auto x = std::any_cast<std::vector<std::shared_ptr<Field>>>(&fields)) {
-    if (!has_err) {
-      ScapeSQL::create_table(tbl_name, std::move(*x));
-    }
+  if (!fields.has_value()) {
+    return std::any();
   }
-  return tbl_name;
+  if (!has_err) {
+    ScapeSQL::create_table(
+        tbl_name,
+        std::any_cast<std::vector<std::shared_ptr<Field>>>(std::move(fields)));
+  }
+  return std::any();
 }
 
 std::any ScapeVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
@@ -253,16 +256,16 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   return planner;
 }
 
+/// field (',' field)*
 std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
   std::vector<std::shared_ptr<Field>> fields;
   fields.reserve(ctx->field().size());
   for (auto fieldctx : ctx->field()) {
     std::any f = fieldctx->accept(this);
-    if (auto x = std::any_cast<std::shared_ptr<Field>>(&f)) {
-      fields.push_back(*x);
-    } else {
-      assert(false);
+    if (!f.has_value()) {
+      return std::any();
     }
+    fields.push_back(std::any_cast<std::shared_ptr<Field>>(std::move(f)));
   }
   return fields;
 }
@@ -271,12 +274,12 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   std::shared_ptr<Field> field =
       std::make_shared<Field>(ctx->Identifier()->getText(), get_unified_id());
-  field->data_meta = DataTypeHolderBase::build(ctx->type_()->getText());
+  field->dtype_meta = DataTypeHolderBase::build(ctx->type_()->getText());
   field->key_meta = KeyTypeHolderBase::build(KeyType::NORMAL);
   if (ctx->Null() != nullptr) {
     field->notnull = true;
   }
-  auto data_meta = field->data_meta;
+  auto data_meta = field->dtype_meta;
   data_meta->has_default_val = false;
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
@@ -304,6 +307,7 @@ std::any ScapeVisitor::visitValue(SQLParser::ValueContext *ctx) {
   }
 }
 
+/// '(' value (',' value)* ')'
 std::any ScapeVisitor::visitValue_list(SQLParser::Value_listContext *ctx) {
   if (has_err) {
     return std::any();
@@ -341,6 +345,7 @@ std::any ScapeVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
   return set_vars;
 }
 
+/// '*' | selector (',' selector)*
 std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
   using selector_ret_t =
       std::tuple<std::string, std::shared_ptr<Field>, Aggregator>;
@@ -375,6 +380,7 @@ std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
 }
 
 /// @return: (caption, field, aggregator)
+/// column | aggregator '(' column ')' | Count '(' '*' ')'
 std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   Aggregator aggr = Aggregator::NONE;
   if (ctx->aggregator() != nullptr) {
@@ -388,6 +394,7 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   return std::make_tuple(ctx->column()->getText(), field, aggr);
 }
 
+/// Identifier (',' Identifier)*
 std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
   std::vector<std::string> ret;
   ret.reserve(ctx->Identifier().size());
@@ -397,6 +404,7 @@ std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
   return ret;
 }
 
+/// (Identifier '.')? Identifier
 std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
   std::string col = std::move(ctx->getText());
   int dot = col.find('.');
@@ -441,6 +449,7 @@ std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
   return std::any();
 }
 
+/// where_clause ('AND' where_clause)*
 std::any
 ScapeVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) {
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
@@ -455,6 +464,7 @@ ScapeVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) {
   return constraints;
 }
 
+/// column operator_ expression
 std::any ScapeVisitor::visitWhere_operator_expression(
     SQLParser::Where_operator_expressionContext *ctx) {
   Operator op = str2op(ctx->operator_()->getText());

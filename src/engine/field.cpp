@@ -209,24 +209,24 @@ void NormalHolder::deserialize(SequentialAccessor &s) {}
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
   s.write_byte(notnull);
-  data_meta->serealize(s);
+  dtype_meta->serealize(s);
   key_meta->serealize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
   notnull = s.read_byte();
-  data_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
-  data_meta->deserialize(s);
+  dtype_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
+  dtype_meta->deserialize(s);
   key_meta = KeyTypeHolderBase::build(KeyType(s.read_byte()));
   key_meta->deserialize(s);
 }
 
 std::string Field::to_string() const {
-  std::string ret = field_name + "(" + datatype2str(data_meta->type);
+  std::string ret = field_name + "(" + datatype2str(dtype_meta->type);
   if (notnull)
     ret += " NOT NULL";
-  if (data_meta->has_default_val)
-    ret += " DEFAULT " + data_meta->val_str();
+  if (dtype_meta->has_default_val)
+    ret += " DEFAULT " + dtype_meta->val_str();
   return ret + ")";
 }

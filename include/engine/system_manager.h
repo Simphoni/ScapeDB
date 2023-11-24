@@ -1,6 +1,5 @@
 #pragma once
 
-#include "storage/paged_buffer.h"
 #include <map>
 #include <memory>
 #include <string>
@@ -91,6 +90,9 @@ private:
   /// - TableManager: initialize from SQL statement
   /// record manager is set after fields is initialized
   std::vector<std::shared_ptr<Field>> fields;
+  std::shared_ptr<Field> primary_key;
+  std::vector<std::shared_ptr<Field>> foreign_keys;
+
   std::unordered_map<std::string, std::shared_ptr<Field>> name2col;
   bool purged{false};
 

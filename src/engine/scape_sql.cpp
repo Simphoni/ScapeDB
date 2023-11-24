@@ -111,8 +111,8 @@ void describe_table(const std::string &s) {
     table.push_back(field->field_name);
     table.push_back(field->type_str());
     table.push_back(field->notnull ? "NO" : "YES");
-    if (field->data_meta->has_default_val) {
-      table.push_back(field->data_meta->val_str());
+    if (field->dtype_meta->has_default_val) {
+      table.push_back(field->dtype_meta->val_str());
     } else {
       table.push_back("NULL");
     }
@@ -214,7 +214,7 @@ void insert_from_file(const std::string &file_path,
     if (ch == -1)
       break;
     for (int i = 0; i < column_num; ++i) {
-      if (fields[i]->data_meta->type == DataType::INT) {
+      if (fields[i]->dtype_meta->type == DataType::INT) {
         while (!isdigit(ch))
           ch = fastIO::getchar();
         int val = 0;
@@ -223,7 +223,7 @@ void insert_from_file(const std::string &file_path,
           ch = fastIO::getchar();
         }
         memcpy(ptr + offsets[i], &val, sizeof(int));
-      } else if (fields[i]->data_meta->type == DataType::FLOAT) {
+      } else if (fields[i]->dtype_meta->type == DataType::FLOAT) {
         double val = 0, base = 1;
         bool neg = false;
         while (!isdigit(ch) && ch != '-')
@@ -258,7 +258,7 @@ void insert_from_file(const std::string &file_path,
           ch = fastIO::getchar();
         }
         memset(myptr, 0,
-               sizeof(char) * (fields[i]->data_meta->get_size() - myit));
+               sizeof(char) * (fields[i]->dtype_meta->get_size() - myit));
       }
     }
     record_manager->insert_record(ptr);

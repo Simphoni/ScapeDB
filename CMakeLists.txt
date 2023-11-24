@@ -46,5 +46,6 @@ if(BUILD_TEST)
                                               sql_parser)
     set_target_properties(${testname} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                                  ${CMAKE_BINARY_DIR}/test)
+    add_test(${testname} ${CMAKE_BINARY_DIR}/test/${testname})
   endforeach(srcfile ${test_src})
 endif()

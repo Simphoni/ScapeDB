@@ -17,7 +17,11 @@ struct DataTypeHolderBase;
 struct IntHolder;
 struct FloatHolder;
 struct VarcharHolder;
+struct DummyHolder;
 struct KeyTypeHolderBase;
+struct NormalHolder;
+struct PrimaryHolder;
+struct ForeignHolder;
 struct Field;
 
 /// query.h
@@ -41,6 +45,7 @@ enum DataType : uint8_t {
   INT = 1,
   FLOAT,
   VARCHAR,
+  DUMMY,
 };
 
 std::string datatype2str(DataType type);

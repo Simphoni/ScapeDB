@@ -26,7 +26,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   int column_offset = field->pers_offset;
   this->column_index = column_index;
   this->column_offset = column_offset;
-  if (field->data_meta->type == DataType::INT) {
+  if (field->dtype_meta->type == DataType::INT) {
     if (val.type() != typeid(int)) {
       printf("ERROR: where clause type mismatch (expect INT)\n");
       has_err = true;
@@ -79,7 +79,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     default:
       assert(false);
     }
-  } else if (field->data_meta->type == DataType::FLOAT) {
+  } else if (field->dtype_meta->type == DataType::FLOAT) {
     double value = 0;
     if (val.type() == typeid(int)) {
       value = std::any_cast<int>(std::move(val));
@@ -248,7 +248,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     set = [=](char *record) { *(bitmap_t *)record &= ~(1 << column_index); };
     return;
   }
-  if (field->data_meta->type == INT) {
+  if (field->dtype_meta->type == INT) {
     int val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
@@ -263,7 +263,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       *(bitmap_t *)record |= 1 << column_index;
       *(int *)(record + column_offset) = std::any_cast<int>(value_);
     };
-  } else if (field->data_meta->type == FLOAT) {
+  } else if (field->dtype_meta->type == FLOAT) {
     double val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
@@ -278,7 +278,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       *(bitmap_t *)record |= 1 << column_index;
       *(double *)(record + column_offset) = std::any_cast<double>(value_);
     };
-  } else if (field->data_meta->type == VARCHAR) {
+  } else if (field->dtype_meta->type == VARCHAR) {
     std::string s;
     int mxlen = field->get_size();
     if (value_.type() != typeid(std::string)) {

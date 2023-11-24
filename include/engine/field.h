@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <engine/defs.h>
 #include <storage/defs.h>
@@ -81,6 +82,15 @@ struct VarcharHolder : public DataTypeHolderBase {
   void deserialize(SequentialAccessor &s) override;
 };
 
+struct DummyHolder : public DataTypeHolderBase {
+  DummyHolder() { type = DataType::DUMMY; }
+
+  std::string type_str() override { return "DUMMY"; }
+  std::string val_str() override { return "[]"; }
+  int get_size() const override { return 0; }
+  void set_default_value(std::any val) override {}
+};
+
 struct KeyTypeHolderBase {
   KeyType type;
 
@@ -91,15 +101,36 @@ struct KeyTypeHolderBase {
 };
 
 struct NormalHolder : public KeyTypeHolderBase {
-
-  NormalHolder() { type = PRIMARY; }
+  NormalHolder() { type = NORMAL; }
   void serealize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
 };
 
+struct PrimaryHolder : public KeyTypeHolderBase {
+  std::vector<std::string> field_names;
+  std::vector<std::shared_ptr<Field>> fields;
+  PrimaryHolder() { type = PRIMARY; }
+  void serealize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(std::shared_ptr<TableManager> table) {}
+};
+
+struct ForeignHolder : public KeyTypeHolderBase {
+  std::vector<std::string> field_names;
+  std::vector<std::shared_ptr<Field>> fields;
+  std::string ref_table_name;
+  std::vector<std::string> ref_field_names;
+  std::vector<std::shared_ptr<Field>> ref_fields;
+  ForeignHolder() { type = FOREIGN; }
+  void serealize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(std::shared_ptr<TableManager> table,
+             std::shared_ptr<DatabaseManager> db);
+};
+
 struct Field {
   std::string field_name;
-  std::shared_ptr<DataTypeHolderBase> data_meta;
+  std::shared_ptr<DataTypeHolderBase> dtype_meta;
   std::shared_ptr<KeyTypeHolderBase> key_meta;
   bool notnull;
   unified_id_t field_id, table_id;
@@ -114,7 +145,7 @@ struct Field {
   void serialize(SequentialAccessor &s) const;
   std::string to_string() const;
 
-  std::string type_str() const { return data_meta->type_str(); }
+  std::string type_str() const { return dtype_meta->type_str(); }
   /// NOTE: returns mxlen + 1 for VARCHAR
-  inline int get_size() const noexcept { return data_meta->get_size(); }
+  inline int get_size() const noexcept { return dtype_meta->get_size(); }
 };
