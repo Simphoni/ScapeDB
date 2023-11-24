@@ -5,6 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_LAUNCHER ccache)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O2")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 find_package(antlr4-runtime REQUIRED)
 
@@ -28,7 +29,7 @@ file(GLOB_RECURSE scape_src src/engine/*.cpp src/frontend/*.cpp
      src/storage/*.cpp src/utils/*.cpp)
 
 add_library(sql_parser SHARED ${parser_src})
-add_library(scape_engine ${scape_src})
+add_library(scape_engine SHARED ${scape_src})
 add_executable(db src/main.cpp)
 target_link_libraries(scape_engine PRIVATE antlr4_shared)
 target_link_libraries(db PRIVATE scape_engine sql_parser)
@@ -41,6 +42,9 @@ if(BUILD_TEST)
     get_filename_component(testname ${srcfile} NAME_WE)
     add_executable(${testname} ${srcfile})
     # library order matters
-    target_link_libraries(${testname} PRIVATE gtest_main scape_engine sql_parser)
+    target_link_libraries(${testname} PRIVATE gtest_main scape_engine
+                                              sql_parser)
+    set_target_properties(${testname} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                 ${CMAKE_BINARY_DIR}/test)
   endforeach(srcfile ${test_src})
 endif()

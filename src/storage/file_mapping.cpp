@@ -12,6 +12,10 @@ FileMapping::~FileMapping() {
   for (auto it : filenames) {
     close(it.first);
   }
+  for (auto it : tempfds) {
+    close(it.second);
+    fs::remove(it.first);
+  }
 }
 
 bool FileMapping::create_file(const std::string &s) const {
@@ -28,7 +32,7 @@ int FileMapping::create_temp_file() {
   std::string filename = Config::get()->temp_file_template;
   int fd = mkstemp(filename.data());
   assert(fd != -1);
-  fds[filename] = fd;
+  tempfds[filename] = fd;
   filenames[fd] = filename;
   return fd;
 }
@@ -39,7 +43,7 @@ void FileMapping::close_temp_file(int fd) {
   }
   std::string filename = filenames[fd];
   filenames.erase(fd);
-  fds.erase(filename);
+  tempfds.erase(filename);
   close(fd);
   fs::remove(filename);
 }
@@ -79,7 +83,7 @@ bool FileMapping::read_page(PageLocator pos, uint8_t *ptr) {
   if (!is_open(pos.first)) {
     return false;
   }
-  int offset = pos.second * Config::PAGE_SIZE;
+  off_t offset = (off_t)pos.second * Config::PAGE_SIZE;
   off_t res = lseek(pos.first, offset, SEEK_SET);
   if (res != offset)
     return false;
@@ -91,7 +95,7 @@ bool FileMapping::write_page(PageLocator pos, uint8_t *ptr) {
   if (!is_open(pos.first)) {
     return false;
   }
-  int offset = pos.second * Config::PAGE_SIZE;
+  off_t offset = (off_t)pos.second * Config::PAGE_SIZE;
   off_t res = lseek(pos.first, offset, SEEK_SET);
   if (res != offset)
     return false;

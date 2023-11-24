@@ -57,6 +57,8 @@ public:
 
   // read a specific page from a file
   uint8_t *read_file(PageLocator pos);
+  // mark as dirty from beginning
+  uint8_t *read_temp_file(PageLocator pos);
   bool mark_dirty(uint8_t *ptr);
 };
 

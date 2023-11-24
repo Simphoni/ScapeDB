@@ -10,6 +10,7 @@
 class FileMapping {
 private:
   static std::shared_ptr<FileMapping> instance;
+  std::unordered_map<std::string, int> tempfds;
   std::unordered_map<std::string, int> fds;
   std::unordered_map<int, std::string> filenames;
 

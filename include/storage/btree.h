@@ -81,6 +81,10 @@ private:
                    const uint8_t *record);
   void leaf_split(int pagenum, uint8_t *slice, std::vector<int> &key_pushup,
                   int &val_pushup, const uint8_t *record);
+  void page_array_insert(NodeType type, int *keys, uint8_t *data, int size,
+                         int pos);
+  void page_array_remove(NodeType type, int *keys, uint8_t *data, int size,
+                         int pos);
   void internal_insert(uint8_t *slice, const std::vector<int> key, int val);
   void internal_split(int pagenum, uint8_t *slice, std::vector<int> &key_pushup,
                       int &val_pushup);
@@ -98,6 +102,7 @@ public:
   precise_match(const std::vector<int> &key) const;
 
   void insert(const std::vector<int> &key, const uint8_t *record);
+  bool erase(const std::vector<int> &key);
 
   void serialize(SequentialAccessor &accessor) const;
 

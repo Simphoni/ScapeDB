@@ -90,6 +90,25 @@ uint8_t *PagedBuffer::read_file(PageLocator pos) {
   return pages[id].slice;
 }
 
+uint8_t *PagedBuffer::read_temp_file(PageLocator pos) {
+  if (!base->is_open(pos.first)) {
+    return nullptr;
+  }
+  auto it = pos2page.find(pos);
+  if (it != pos2page.end()) {
+    access(it->second);
+    pages[it->second].dirty = true;
+    return pages[it->second].slice;
+  }
+  int id = get_replace();
+  base->read_page(pos, pages[id].slice);
+  pages[id].pos = pos;
+  pages[id].dirty = true;
+  pos2page[pos] = id;
+  list_append(id);
+  return pages[id].slice;
+}
+
 bool PagedBuffer::mark_dirty(uint8_t *ptr) {
   if (ptr < head_ptr ||
       ptr >= head_ptr + Config::POOLED_PAGES * Config::PAGE_SIZE) {
