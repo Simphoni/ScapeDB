@@ -2,5 +2,6 @@ CREATE DATABASE TABLE_2;
 USE TABLE_2;
 CREATE TABLE main(p INT, q INT);
 DESC main;
-CREATE TABLE PART(a INT, b INT, c INT, PRIMARY KEY prime(a,b), FOREIGN KEY (c,d) REFERENCES main(p,q));
-DESC PART;
+CREATE TABLE part(a INT, b INT, c INT, PRIMARY KEY prime(a,b), FOREIGN KEY (c,d) REFERENCES main(p,q));
+CREATE TABLE part_dup(a INT, b INT, c INT, PRIMARY KEY prime(a,b), PRIMARY KEY (c,d));
+DESC part;

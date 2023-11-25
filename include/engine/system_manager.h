@@ -85,11 +85,8 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string parent;
 
-  /// fields is initialized by the following 2 methods:
-  /// - table_meta_read: initialize from persistent storage
-  /// - TableManager: initialize from SQL statement
-  /// record manager is set after fields is initialized
   std::vector<std::shared_ptr<Field>> fields;
+  /// constraints
   std::shared_ptr<Field> primary_key;
   std::vector<std::shared_ptr<Field>> foreign_keys;
 
@@ -119,10 +116,15 @@ public:
   }
 
   inline std::string get_name() const noexcept { return table_name; }
-  const std::vector<std::shared_ptr<Field>> &get_fields() const noexcept {
+  const std::vector<std::shared_ptr<Field>> &get_fields() const {
     return fields;
   }
-  std::shared_ptr<Field> get_field(const std::string &s);
+  std::shared_ptr<Field> get_field(const std::string &s) const;
+
+  std::shared_ptr<Field> get_primary_key() const { return primary_key; }
+  const std::vector<std::shared_ptr<Field>> &get_foreign_keys() const {
+    return foreign_keys;
+  }
 
   void purge();
 

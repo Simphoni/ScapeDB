@@ -67,6 +67,8 @@ void show_tables() {
 
 void create_table(const std::string &s,
                   std::vector<std::shared_ptr<Field>> &&fields) {
+  if (has_err)
+    return;
   auto db = ScapeFrontend::get()->get_current_db_manager();
   if (db == nullptr) {
     printf("ERROR: no database selected\n");
@@ -90,6 +92,16 @@ void drop_table(const std::string &s) {
   } else {
     db->drop_table(s);
   }
+}
+
+static void print_list(const std::vector<std::string> &s) {
+  putchar('(');
+  for (int i = 0; i < s.size(); ++i) {
+    if (i != 0)
+      printf(", ");
+    printf("%s", s[i].data());
+  }
+  putchar(')');
 }
 
 void describe_table(const std::string &s) {
@@ -118,6 +130,35 @@ void describe_table(const std::string &s) {
     }
   }
   Logger::tabulate(table, table.size() / 4, 4);
+
+  if (Config::get()->batch_mode) {
+    puts("");
+  }
+  auto prikey = tbl->get_primary_key();
+  if (prikey != nullptr) {
+    auto key_detail =
+        std::dynamic_pointer_cast<PrimaryHolder>(prikey->key_meta);
+    assert(key_detail != nullptr);
+    printf("PRIMARY KEY ");
+    if (!prikey->random_name) {
+      printf("%s", prikey->field_name.data());
+    }
+    print_list(key_detail->field_names);
+    puts(";");
+  }
+  auto foreign_keys = tbl->get_foreign_keys();
+  for (auto key : foreign_keys) {
+    auto key_detail = std::dynamic_pointer_cast<ForeignHolder>(key->key_meta);
+    assert(key_detail != nullptr);
+    printf("FOREIGN KEY ");
+    if (!key->random_name) {
+      printf("%s", key->field_name.data());
+    }
+    print_list(key_detail->local_field_names);
+    printf(" REFERENCES %s", key_detail->ref_table_name.data());
+    print_list(key_detail->ref_field_names);
+    puts(";");
+  }
 }
 
 void update_set_table(
@@ -232,7 +273,7 @@ void insert_from_file(const std::string &file_path,
           neg = true;
           ch = fastIO::getchar();
         }
-        while (!isdigit(ch) && ch != '.') {
+        while (isdigit(ch) && ch != '.') {
           val = val * 10 + ch - '0';
           ch = fastIO::getchar();
         }
@@ -257,7 +298,8 @@ void insert_from_file(const std::string &file_path,
           myptr[myit++] = ch;
           ch = fastIO::getchar();
         }
-        memset(myptr, 0,
+        assert(myit < fields[i]->dtype_meta->get_size());
+        memset(myptr + myit, 0,
                sizeof(char) * (fields[i]->dtype_meta->get_size() - myit));
       }
     }

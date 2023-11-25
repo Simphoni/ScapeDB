@@ -14,11 +14,13 @@ namespace fs = std::filesystem;
 static char buf[1 << 19]; // 0.5M
 static int fd = -1;
 static char *cur, *tail;
+static bool ended;
 
 bool set_file(const std::string &s) {
   if (!fs::is_regular_file(s)) {
     return false;
   }
+  ended = false;
   if (fd != -1) {
     close(fd);
   }
@@ -37,11 +39,19 @@ void end_read() {
 void read_buf() { tail = &buf[0] + read(fd, buf, 1 << 19); }
 
 char getchar() {
+  if (ended) {
+    return -1;
+  }
   if (cur == tail) {
     cur = buf;
     read_buf();
   }
-  return cur == tail ? -1 : *cur++;
+  if (cur == tail) {
+    ended = true;
+    return -1;
+  } else {
+    return *cur++;
+  }
 }
 
 }; // namespace fastIO

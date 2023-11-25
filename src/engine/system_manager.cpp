@@ -146,6 +146,8 @@ void DatabaseManager::create_table(
     const std::string &name, std::vector<std::shared_ptr<Field>> &&fields) {
   unified_id_t id = get_unified_id();
   auto tbl = TableManager::build(this, name, id, std::move(fields));
+  if (has_err)
+    return;
   tables.insert(std::make_pair(id, tbl));
   name2id.insert(std::make_pair(name, id));
 }
@@ -160,6 +162,7 @@ void DatabaseManager::drop_table(const std::string &name) {
   tables.erase(id);
 }
 
+/// construct from persistent data
 TableManager::TableManager(DatabaseManager *par, const std::string &name,
                            unified_id_t id)
     : parent(par->get_name()), table_name(name), table_id(id) {
@@ -187,11 +190,33 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
     name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
     record_len += fields[i]->get_size();
   }
-  // TODO: read index metadata
+  if (accessor.read_byte()) {
+    primary_key = std::make_shared<Field>(get_unified_id());
+    primary_key->deserialize(accessor);
+  }
+  int foreign_key_count = accessor.read<uint32_t>();
+  foreign_keys.resize(foreign_key_count);
+  for (int i = 0; i < foreign_key_count; i++) {
+    foreign_keys[i] = std::make_shared<Field>(get_unified_id());
+    foreign_keys[i]->deserialize(accessor);
+  }
+  if (primary_key != nullptr) {
+    auto prikey =
+        std::dynamic_pointer_cast<PrimaryHolder>(primary_key->key_meta);
+    if (prikey != nullptr) {
+      prikey->build(this);
+    } else {
+      puts("ERROR: metadata is invalid!");
+      std::exit(0);
+    }
+  }
+  /// Foreign key will initialize after all tables are loaded
   record_manager =
       std::shared_ptr<RecordManager>(new RecordManager(data_file, accessor));
+  // TODO: read index metadata
 }
 
+/// construct from create_table SQL query
 TableManager::TableManager(DatabaseManager *par, const std::string &name,
                            unified_id_t id,
                            std::vector<std::shared_ptr<Field>> &&fields_)
@@ -204,7 +229,22 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
   ensure_file(data_file);
   ensure_file(index_file);
 
-  fields = std::move(fields_);
+  for (auto it : std::move(fields_)) {
+    switch (it->key_meta->type) {
+    case KeyType::NORMAL:
+      fields.push_back(it);
+      break;
+    case KeyType::PRIMARY:
+      /// primary key checking done by parser
+      primary_key = it;
+      break;
+    case KeyType::FOREIGN:
+      foreign_keys.push_back(it);
+      break;
+    default:
+      assert(false);
+    }
+  }
   record_len = sizeof(bitmap_t);
   for (size_t i = 0; i < fields.size(); ++i) {
     name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
@@ -213,8 +253,17 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
     fields[i]->table_id = table_id;
     record_len += fields[i]->get_size();
   }
+  if (primary_key != nullptr) {
+    auto prikey =
+        std::dynamic_pointer_cast<PrimaryHolder>(primary_key->key_meta);
+    prikey->build(this);
+    for (auto field : prikey->fields) {
+      field->notnull = true;
+    }
+  }
   record_manager =
       std::shared_ptr<RecordManager>(new RecordManager(data_file, record_len));
+
   assert(record_len == record_manager->record_len);
 }
 
@@ -228,11 +277,19 @@ TableManager::~TableManager() {
   for (const auto &field : fields) {
     field->serialize(accessor);
   }
+  accessor.write_byte(primary_key != nullptr);
+  if (primary_key != nullptr) {
+    primary_key->serialize(accessor);
+  }
+  accessor.write<uint32_t>(foreign_keys.size());
+  for (const auto &field : foreign_keys) {
+    field->serialize(accessor);
+  }
   // TODO: write index metadata
   record_manager->serialize(accessor);
 }
 
-std::shared_ptr<Field> TableManager::get_field(const std::string &s) {
+std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
   auto it = name2col.find(s);
   if (it == name2col.end()) {
     return nullptr;

@@ -4,6 +4,7 @@
 
 #include <engine/defs.h>
 #include <engine/field.h>
+#include <engine/system_manager.h>
 #include <storage/storage.h>
 
 uint64_t cast_f2i(double x) { return *reinterpret_cast<uint64_t *>(&x); }
@@ -216,9 +217,93 @@ void NormalHolder::serialize(SequentialAccessor &s) const {
 
 void NormalHolder::deserialize(SequentialAccessor &s) {}
 
+void PrimaryHolder::serialize(SequentialAccessor &s) const {
+  s.write_byte(PRIMARY);
+  s.write<uint32_t>(field_names.size());
+  for (auto &str : field_names) {
+    s.write_str(str);
+  }
+}
+
+void PrimaryHolder::deserialize(SequentialAccessor &s) {
+  uint32_t sz = s.read<uint32_t>();
+  for (uint32_t i = 0; i < sz; ++i) {
+    field_names.push_back(s.read_str());
+  }
+}
+
+void PrimaryHolder::build(const TableManager *table) {
+  for (auto &str : field_names) {
+    auto field = table->get_field(str);
+    if (field == nullptr) {
+      printf("ERROR: field %s not found\n", str.c_str());
+      has_err = true;
+      return;
+    }
+    fields.push_back(field);
+  }
+}
+
+void ForeignHolder::serialize(SequentialAccessor &s) const {
+  s.write_byte(FOREIGN);
+  s.write<uint32_t>(local_field_names.size());
+  for (auto &str : local_field_names) {
+    s.write_str(str);
+  }
+  s.write_str(ref_table_name);
+  s.write<uint32_t>(ref_field_names.size());
+  for (auto &str : ref_field_names) {
+    s.write_str(str);
+  }
+}
+
+void ForeignHolder::deserialize(SequentialAccessor &s) {
+  uint32_t sz = s.read<uint32_t>();
+  for (uint32_t i = 0; i < sz; ++i) {
+    local_field_names.push_back(s.read_str());
+  }
+  ref_table_name = s.read_str();
+  sz = s.read<uint32_t>();
+  for (uint32_t i = 0; i < sz; ++i) {
+    ref_field_names.push_back(s.read_str());
+  }
+}
+
+void ForeignHolder::build(const TableManager *table,
+                          const DatabaseManager *db) {
+  for (auto &str : local_field_names) {
+    auto field = table->get_field(str);
+    if (field == nullptr) {
+      printf("ERROR: field %s not found\n", str.data());
+      has_err = true;
+      return;
+    }
+    local_fields.push_back(field);
+  }
+  auto ref_table = db->get_table_manager(ref_table_name);
+  if (ref_table == nullptr) {
+    printf("ERROR: ref table %s not found\n", ref_table_name.data());
+    has_err = true;
+    return;
+  }
+  for (auto &str : ref_field_names) {
+    auto field = ref_table->get_field(str);
+    if (field == nullptr) {
+      printf("ERROR: field %s.%s not found\n", ref_table_name.data(),
+             str.data());
+      has_err = true;
+      return;
+    }
+    ref_fields.push_back(field);
+  }
+}
+
+/// Field
+
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
   s.write_byte(notnull);
+  s.write_byte(random_name);
   dtype_meta->serialize(s);
   key_meta->serialize(s);
 }
@@ -226,6 +311,7 @@ void Field::serialize(SequentialAccessor &s) const {
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
   notnull = s.read_byte();
+  random_name = s.read_byte();
   dtype_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
   dtype_meta->deserialize(s);
   key_meta = KeyTypeHolderBase::build(KeyType(s.read_byte()));

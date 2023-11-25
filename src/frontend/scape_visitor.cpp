@@ -62,11 +62,9 @@ std::any ScapeVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) {
   if (!fields.has_value()) {
     return std::any();
   }
-  if (!has_err) {
-    ScapeSQL::create_table(
-        tbl_name,
-        std::any_cast<std::vector<std::shared_ptr<Field>>>(std::move(fields)));
-  }
+  ScapeSQL::create_table(
+      tbl_name,
+      std::any_cast<std::vector<std::shared_ptr<Field>>>(std::move(fields)));
   return std::any();
 }
 
@@ -89,6 +87,7 @@ std::any ScapeVisitor::visitLoad_table(SQLParser::Load_tableContext *ctx) {
     return std::any();
   }
   std::string file_name = ctx->String(0)->getText();
+  file_name = file_name.substr(1, file_name.size() - 2);
   std::string tbl_name = ctx->Identifier()->getText();
   ScapeSQL::insert_from_file(file_name, tbl_name);
   return std::any();
@@ -240,7 +239,7 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
 
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   if (ctx->where_and_clause() != nullptr) {
-    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    std::any ret_cons = ctx->where_and_clause()->accept(this);
     if (!ret_cons.has_value()) {
       return std::any();
     }
@@ -261,12 +260,19 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
 std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
   std::vector<std::shared_ptr<Field>> fields;
   fields.reserve(ctx->field().size());
+  int n_primary = 0;
   for (auto fieldctx : ctx->field()) {
     std::any f = fieldctx->accept(this);
     if (!f.has_value()) {
       return std::any();
     }
     fields.push_back(std::any_cast<std::shared_ptr<Field>>(std::move(f)));
+    n_primary += fields.back()->key_meta->type == KeyType::PRIMARY;
+  }
+  if (n_primary > 1) {
+    has_err = true;
+    puts("ERROR: table created with multiple primary keys.");
+    return std::any();
   }
   return fields;
 }
@@ -316,7 +322,6 @@ ScapeVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
 /// '(' identifiers ')'
 std::any
 ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
-  puts("I AM HERE");
   std::shared_ptr<Field> field = std::make_shared<Field>(get_unified_id());
   field->dtype_meta = std::make_shared<DummyHolder>();
   field->key_meta = KeyTypeHolderBase::build(KeyType::FOREIGN);
@@ -333,7 +338,7 @@ ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
     puts("ERROR: must specify both foreign key and reference key");
     return std::any();
   }
-  foreign->field_names = std::any_cast<std::vector<std::string>>(
+  foreign->local_field_names = std::any_cast<std::vector<std::string>>(
       ctx->identifiers(0)->accept(this));
   foreign->ref_field_names = std::any_cast<std::vector<std::string>>(
       ctx->identifiers(1)->accept(this));

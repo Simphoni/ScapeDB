@@ -117,31 +117,29 @@ struct PrimaryHolder : public KeyTypeHolderBase {
   std::vector<std::shared_ptr<Field>> fields;
 
   PrimaryHolder() { type = PRIMARY; }
-  void serialize(SequentialAccessor &s) const override {}
-  void deserialize(SequentialAccessor &s) override {}
-  void build(std::shared_ptr<TableManager> table) {}
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(const TableManager *table);
 };
 
 struct ForeignHolder : public KeyTypeHolderBase {
-  std::vector<std::string> field_names;
-  std::vector<std::shared_ptr<Field>> fields;
   std::string ref_table_name;
+  std::vector<std::string> local_field_names;
   std::vector<std::string> ref_field_names;
+  std::vector<std::shared_ptr<Field>> local_fields;
   std::vector<std::shared_ptr<Field>> ref_fields;
 
   ForeignHolder() { type = FOREIGN; }
-  void serialize(SequentialAccessor &s) const override {}
-  void deserialize(SequentialAccessor &s) override {}
-  void build(std::shared_ptr<TableManager> table,
-             std::shared_ptr<DatabaseManager> db);
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(const TableManager *table, const DatabaseManager *db);
 };
 
 struct Field {
-  bool random_name{false};
   std::string field_name;
   std::shared_ptr<DataTypeHolderBase> dtype_meta;
   std::shared_ptr<KeyTypeHolderBase> key_meta;
-  bool notnull;
+  bool notnull{false}, random_name{false};
   unified_id_t field_id, table_id;
   int pers_index, pers_offset;
 
