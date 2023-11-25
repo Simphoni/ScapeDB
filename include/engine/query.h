@@ -29,25 +29,41 @@ struct Selector {
   }
 };
 
-/// where clause is managed with shared_ptr to better support derived classes
+/// managed with shared_ptr
 struct WhereConstraint {
-  int table_id;
-  int column_index, column_offset;
-  int value; /// reserved for BPlusTree, which supports only integer
+  unified_id_t table_id;
   ConstraintType type;
 
   virtual bool check(const uint8_t *record, const uint8_t *other) const {
     return true;
   }
   virtual bool live_in(int table_id_) { return table_id == table_id_; }
+  virtual bool will_need(int field_id_) { return false; }
 };
 
 struct ColumnOpValueConstraint : public WhereConstraint {
   std::function<bool(const char *)> cmp;
+  /// reserved for BPlusTree, which supports only integer
+  int column_index, column_offset;
+  int value;
 
   ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
                           std::any val);
   bool check(const uint8_t *record, const uint8_t *other) const override;
+};
+
+struct ColumnOpColumnConstraint : public WhereConstraint {
+  unified_id_t table_id_other;
+  unified_id_t field_id1, field_id2;
+  std::function<bool(const char *, const char *)> cmp;
+
+  ColumnOpColumnConstraint(std::shared_ptr<Field> field, Operator op,
+                           std::shared_ptr<Field> other);
+  bool check(const uint8_t *record, const uint8_t *other) const override;
+  bool live_in(int table_id_) override {
+    return table_id == table_id_ || table_id_other == table_id_;
+  }
+  bool will_need(int field_id_) override { return false; }
 };
 
 struct SetVariable {

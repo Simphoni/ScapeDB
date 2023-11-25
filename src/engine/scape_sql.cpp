@@ -183,7 +183,7 @@ void update_set_table(
       std::vector<std::shared_ptr<Field>>({}));
   int modified_rows = 0;
   while (record_iter->get_next_valid()) {
-    auto [pagenum, slotnum] = record_iter->get_valid_pos();
+    auto [pagenum, slotnum] = record_iter->get_locator();
     auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
     memcpy(buf.data(), record_ref, table->get_record_len());
     for (auto op : set_variables) {
@@ -210,7 +210,7 @@ void delete_from_table(
       std::vector<std::shared_ptr<Field>>({}));
   int modified_rows = 0;
   while (record_iter->get_next_valid()) {
-    auto [pagenum, slotnum] = record_iter->get_valid_pos();
+    auto [pagenum, slotnum] = record_iter->get_locator();
     auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
     /// TODO: perform checking
     record_manager->erase_record(pagenum, slotnum);

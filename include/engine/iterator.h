@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include <engine/defs.h>
@@ -23,7 +24,9 @@ class Iterator {
 protected:
   IteratorType type;
   bool source_ended;
-  int fd_dst, fd_src;
+
+  int fd_dst;
+  std::set<unified_id_t> table_ids;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   std::vector<std::shared_ptr<Field>> fields_src, fields_dst;
   int record_len, record_per_page;
@@ -44,18 +47,21 @@ public:
   bool block_end() const { return dst_iter == n_records; }
   bool all_end() const { return source_ended && dst_iter == n_records; }
   void get(std::vector<uint8_t> &buf);
+  const std::set<unified_id_t> &get_table_ids() const { return table_ids; }
+  const std::vector<std::shared_ptr<Field>> &get_fields_dst() const {
+    return fields_dst;
+  }
 
   virtual bool get_next_valid() = 0;
   /// fill next block of records into buffer and reset block iter
   /// @return number of records filled
   virtual int fill_next_block() = 0;
   virtual void reset_all() = 0;
-  virtual std::pair<int, int> get_valid_pos() = 0;
 };
 
 class RecordIterator : public Iterator {
 private:
-  int pagenum_src, slotnum_src;
+  int fd_src, pagenum_src, slotnum_src;
   uint8_t *current_src_page;
   std::shared_ptr<RecordManager> record_manager;
   std::vector<int> valid_records;
@@ -63,6 +69,7 @@ private:
 
 public:
   /// @param cons will be filtered
+  /// @param fileds_src fields directly taken from table_manager
   /// @param fields_dst will be filtered with fields_src
   RecordIterator(std::shared_ptr<RecordManager> rec,
                  const std::vector<std::shared_ptr<WhereConstraint>> &cons,
@@ -74,11 +81,16 @@ public:
   bool get_next_valid() override;
   void reset_all() override;
   int fill_next_block() override;
-  std::pair<int, int> get_valid_pos() override;
+  /// for delete/set operatione
+  std::pair<int, int> get_locator();
 };
 
-class ResultIterator : public Iterator {
+class JoinedIterator : public Iterator {
 private:
-  int fd, n_records;
   std::shared_ptr<Iterator> lhs, rhs;
+
+public:
+  JoinedIterator(std::shared_ptr<Iterator> lhs, std::shared_ptr<Iterator> rhs,
+                 const std::vector<std::shared_ptr<WhereConstraint>> &cons,
+                 const std::vector<Field> &fields_dst);
 };

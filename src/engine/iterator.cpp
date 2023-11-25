@@ -30,6 +30,8 @@ RecordIterator::RecordIterator(
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
     const std::vector<std::shared_ptr<Field>> &fields_dst_) {
+  int table_id = fields_src_[0]->table_id;
+  table_ids.insert(table_id);
   record_manager = rec_;
   fields_src = fields_src_;
   fd_src = record_manager->fd;
@@ -48,6 +50,7 @@ RecordIterator::RecordIterator(
 
   std::set<unified_id_t> field_ids_src;
   for (auto &field : fields_src) {
+    assert(field->table_id == table_id);
     field_ids_src.insert(field->field_id);
   }
   record_len = sizeof(bitmap_t);
@@ -157,6 +160,32 @@ void RecordIterator::reset_all() {
   source_ended = false;
 }
 
-std::pair<int, int> RecordIterator::get_valid_pos() {
+std::pair<int, int> RecordIterator::get_locator() {
   return std::make_pair(pagenum_src, slotnum_src);
+}
+
+JoinedIterator::JoinedIterator(
+    std::shared_ptr<Iterator> lhs_, std::shared_ptr<Iterator> rhs_,
+    const std::vector<std::shared_ptr<WhereConstraint>> &cons,
+    const std::vector<Field> &fields_dst)
+    : lhs(lhs_), rhs(rhs_) {
+  const auto &ltables = lhs->get_table_ids();
+  const auto &rtables = rhs->get_table_ids();
+  std::set_union(ltables.begin(), ltables.end(), rtables.begin(), rtables.end(),
+                 std::inserter(table_ids, table_ids.begin()));
+  assert(lhs->get_table_ids().size() + rhs->get_table_ids().size() ==
+         table_ids.size());
+  fd_dst = FileMapping::get()->create_temp_file();
+  for (auto it_cons : cons) {
+    auto col_comp =
+        std::dynamic_pointer_cast<ColumnOpColumnConstraint>(it_cons);
+    if (col_comp == nullptr)
+      continue;
+    if ((ltables.contains(col_comp->table_id) &&
+         rtables.contains(col_comp->table_id_other)) ||
+        (ltables.contains(col_comp->table_id_other) &&
+         rtables.contains(col_comp->table_id))) {
+      constraints.push_back(it_cons);
+    }
+  }
 }

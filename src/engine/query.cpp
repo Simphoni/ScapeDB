@@ -7,6 +7,9 @@
 #include <engine/system_manager.h>
 #include <storage/storage.h>
 
+using IType = IntHolder::DType;
+using FType = FloatHolder::DType;
+
 void QueryPlanner::generate_plan() {
   for (auto tbl : tables) {
     direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
@@ -19,61 +22,60 @@ void QueryPlanner::generate_plan() {
   }
 }
 
+inline bool null_check(const char *p, int pos) {
+  return ((*(const bitmap_t *)p) >> pos) & 1;
+}
+
 ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
                                                  Operator op, std::any val) {
   table_id = field->table_id;
-  int column_index = field->pers_index;
-  int column_offset = field->pers_offset;
-  this->column_index = column_index;
-  this->column_offset = column_offset;
+  int col_idx = field->pers_index;
+  int col_off = field->pers_offset;
+  this->column_index = col_idx;
+  this->column_offset = col_off;
   if (field->dtype_meta->type == DataType::INT) {
-    if (val.type() != typeid(int)) {
+    if (val.type() != typeid(IType)) {
       printf("ERROR: where clause type mismatch (expect INT)\n");
       has_err = true;
       return;
     }
-    int value = std::any_cast<int>(std::move(val));
+    int value = std::any_cast<IType>(std::move(val));
     this->value = value;
     switch (op) {
     case Operator::EQ:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) == value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) == value);
       };
       break;
     case Operator::NE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) != value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) != value);
       };
+      break;
     case Operator::GE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) >= value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) >= value);
       };
       break;
     case Operator::GT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) > value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) > value);
       };
       break;
     case Operator::LE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) <= value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) <= value);
       };
       break;
     case Operator::LT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const int *)(record + column_offset) < value);
+        return null_check(record, col_idx) &&
+               (*(const IType *)(record + col_off) < value);
       };
       break;
     default:
@@ -81,10 +83,10 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     }
   } else if (field->dtype_meta->type == DataType::FLOAT) {
     double value = 0;
-    if (val.type() == typeid(int)) {
-      value = std::any_cast<int>(std::move(val));
-    } else if (val.type() == typeid(double)) {
-      value = std::any_cast<double>(std::move(val));
+    if (val.type() == typeid(IType)) {
+      value = std::any_cast<IType>(std::move(val));
+    } else if (val.type() == typeid(FType)) {
+      value = std::any_cast<FType>(std::move(val));
     } else {
       printf("ERROR: where clause type mismatch (expect FLOAT, got VARCHAR)\n");
       has_err = true;
@@ -93,43 +95,38 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     switch (op) {
     case Operator::EQ:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) == value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) == value);
       };
       break;
     case Operator::NE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) != value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) != value);
       };
+      break;
     case Operator::GE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) >= value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) >= value);
       };
       break;
     case Operator::GT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) > value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) > value);
       };
       break;
     case Operator::LE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) <= value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) <= value);
       };
       break;
     case Operator::LT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        return ((nullstate >> column_index) & 1) &&
-               (*(const double *)(record + column_offset) < value);
+        return null_check(record, col_idx) &&
+               (*(const FType *)(record + col_off) < value);
       };
       break;
     default:
@@ -146,37 +143,34 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     switch (op) {
     case Operator::EQ:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] != value[i])
+          if (record[col_off + i] != value[i])
             return false;
         }
-        return record[column_offset + value.size()] == 0;
+        return record[col_off + value.size()] == 0;
       };
       break;
     case Operator::NE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] != value[i])
+          if (record[col_off + i] != value[i])
             return true;
         }
-        return record[column_offset + value.size()] != 0;
+        return record[col_off + value.size()] != 0;
       };
       break;
     case Operator::GE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] < value[i])
+          if (record[col_off + i] < value[i])
             return false;
-          if (record[column_offset + i] > value[i])
+          if (record[col_off + i] > value[i])
             return true;
         }
         return true;
@@ -184,41 +178,38 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::GT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] < value[i])
+          if (record[col_off + i] < value[i])
             return false;
-          if (record[column_offset + i] > value[i])
+          if (record[col_off + i] > value[i])
             return true;
         }
-        return record[column_offset + value.size()] > 0;
+        return record[col_off + value.size()] > 0;
       };
       break;
     case Operator::LE:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] > value[i])
+          if (record[col_off + i] > value[i])
             return false;
-          if (record[column_offset + i] < value[i])
+          if (record[col_off + i] < value[i])
             return true;
         }
-        return record[column_offset + value.size()] == 0;
+        return record[col_off + value.size()] == 0;
       };
       break;
     case Operator::LT:
       cmp = [=](const char *record) {
-        bitmap_t nullstate = *(const bitmap_t *)record;
-        if (((nullstate >> column_index) & 1) == 0)
+        if (!null_check(record, col_off))
           return false;
         for (int i = 0; i < len; ++i) {
-          if (record[column_offset + i] > value[i])
+          if (record[col_off + i] > value[i])
             return false;
-          if (record[column_offset + i] < value[i])
+          if (record[col_off + i] < value[i])
             return true;
         }
         return false; /// cannot be smaller than '\0'
@@ -235,17 +226,218 @@ bool ColumnOpValueConstraint::check(const uint8_t *record,
   return cmp((char *)record);
 }
 
+ColumnOpColumnConstraint::ColumnOpColumnConstraint(
+    std::shared_ptr<Field> field, Operator op, std::shared_ptr<Field> other) {
+  table_id = field->table_id;
+  table_id_other = other->table_id;
+  field_id1 = field->field_id;
+  field_id2 = other->field_id;
+  int col_idx = field->pers_index;
+  int col_off = field->pers_offset;
+  int col_idx_o = other->pers_index;
+  int col_off_o = other->pers_offset;
+  if (field->dtype_meta->type == DataType::INT) {
+    switch (op) {
+    case Operator::EQ:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) ==
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    case Operator::NE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) !=
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    case Operator::GE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) >=
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    case Operator::GT:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) >
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    case Operator::LE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) <=
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    case Operator::LT:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const IType *)(record + col_off) <
+                *(const IType *)(other + col_off_o));
+      };
+      break;
+    default:
+      assert(false);
+    }
+  } else if (field->dtype_meta->type == DataType::FLOAT) {
+    switch (op) {
+    case Operator::EQ:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) ==
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    case Operator::NE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) !=
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    case Operator::GE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) >=
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    case Operator::GT:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) >
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    case Operator::LE:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) <=
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    case Operator::LT:
+      cmp = [=](const char *record, const char *other) {
+        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
+               (*(const FType *)(record + col_off) <
+                *(const FType *)(other + col_off_o));
+      };
+      break;
+    default:
+      assert(false);
+    }
+  } else if (field->dtype_meta->type == DataType::VARCHAR) {
+    int len = field->get_size();
+    switch (op) {
+    case Operator::EQ:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] != other[col_off_o + i])
+            return false;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return true;
+      };
+      break;
+    case Operator::NE:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] != other[col_off_o + i])
+            return true;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return false;
+      };
+      break;
+    case Operator::GE:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] > other[col_off_o + i])
+            return true;
+          else if (record[col_off + i] < other[col_off_o + i])
+            return false;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return true;
+      };
+      break;
+    case Operator::GT:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] > other[col_off_o + i])
+            return true;
+          else if (record[col_off + i] < other[col_off_o + i])
+            return false;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return false;
+      };
+      break;
+    case Operator::LE:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] > other[col_off_o + i])
+            return false;
+          else if (record[col_off + i] < other[col_off_o + i])
+            return true;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return true;
+      };
+      break;
+    case Operator::LT:
+      cmp = [=](const char *record, const char *other) {
+        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
+          return false;
+        for (int i = 0; i < len; ++i) {
+          if (record[col_off + i] > other[col_off_o + i])
+            return false;
+          else if (record[col_off + i] < other[col_off_o + i])
+            return true;
+          if (record[col_off + i] == 0)
+            break;
+        }
+        return false;
+      };
+      break;
+    default:
+      assert(false);
+    }
+  } else {
+    assert(false);
+  }
+}
+
 SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
   /// default value should not be used here
-  int column_index = field->pers_index;
-  int column_offset = field->pers_offset;
+  int col_idx = field->pers_index;
+  int col_off = field->pers_offset;
   if (!value_.has_value()) {
     if (field->notnull) {
       printf("ERROR: attempt to violate Not Null constraint\n");
       has_err = true;
       return;
     }
-    set = [=](char *record) { *(bitmap_t *)record &= ~(1 << column_index); };
+    set = [=](char *record) { *(bitmap_t *)record &= ~(1 << col_idx); };
     return;
   }
   if (field->dtype_meta->type == INT) {
@@ -260,8 +452,8 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       return;
     }
     set = [=](char *record) {
-      *(bitmap_t *)record |= 1 << column_index;
-      *(int *)(record + column_offset) = std::any_cast<int>(value_);
+      *(bitmap_t *)record |= 1 << col_idx;
+      *(int *)(record + col_off) = std::any_cast<int>(value_);
     };
   } else if (field->dtype_meta->type == FLOAT) {
     double val = 0;
@@ -275,8 +467,8 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       return;
     }
     set = [=](char *record) {
-      *(bitmap_t *)record |= 1 << column_index;
-      *(double *)(record + column_offset) = std::any_cast<double>(value_);
+      *(bitmap_t *)record |= 1 << col_idx;
+      *(double *)(record + col_off) = std::any_cast<double>(value_);
     };
   } else if (field->dtype_meta->type == VARCHAR) {
     std::string s;
@@ -288,10 +480,10 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     }
     s = std::any_cast<std::string>(std::move(value_));
     set = [=](char *record) {
-      *(bitmap_t *)record |= 1 << column_index;
-      memset(record + column_offset, 0, mxlen);
-      memcpy(record + column_offset, s.data(), s.size());
-      record[column_offset + s.size()] = 0;
+      *(bitmap_t *)record |= 1 << col_idx;
+      memset(record + col_off, 0, mxlen);
+      memcpy(record + col_off, s.data(), s.size());
+      record[col_off + s.size()] = 0;
     };
   }
 }

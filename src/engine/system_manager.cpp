@@ -321,6 +321,6 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
       return;
     }
   }
-  *(uint16_t *)ptr = bitmap;
+  *(bitmap_t *)ptr = bitmap;
   record_manager->insert_record(ptr);
 }
