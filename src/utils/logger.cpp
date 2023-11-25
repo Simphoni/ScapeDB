@@ -68,73 +68,6 @@ int fmt_width(std::shared_ptr<Field> f) {
 
 void print(int x, int width) { std::cout << std::setw(width) << x; }
 
-#ifdef USE_SINGLE
-static constexpr int kSingleDigit = std::numeric_limits<float>::digits10;
-
-/// a naive workaround to simulate MySQL behavior
-char *singleToStrTrimmed(float x) {
-  static char buf[50];
-  int sgn = 1;
-  if (x < 0) {
-    sgn = -1;
-    x = -x;
-  }
-  sprintf(buf, "%.4lf", (double)x);
-  int slen = strlen(buf);
-  std::reverse(buf, buf + slen);
-  int it = slen - 1, counter = 0;
-  while (it >= 2) {
-    if (buf[it] == '.') {
-      --it;
-      continue;
-    }
-    if (counter >= kSingleDigit) {
-      buf[it] = '0';
-    } else {
-      ++counter;
-      if (counter == kSingleDigit || (counter < kSingleDigit && it == 2)) {
-        /// current buffer is xxxx.xxxx
-        int lower_val = 0;
-        if (it == 0) {
-          break;
-        } else if (it < 4 || it >= 6) {
-          lower_val = buf[it - 1] - '0';
-        } else { /// it == 5
-          lower_val = buf[3] - '0';
-        }
-        if (lower_val >= 5) {
-          buf[it]++;
-        }
-      }
-    }
-    it--;
-  }
-  for (int i = 0; i < slen; ++i) {
-    if (buf[i] == '.' || std::isdigit(buf[i])) {
-      continue;
-    }
-    assert(buf[i] == '9' + 1);
-    buf[i] = '0';
-    int nxt = (i == 3 ? 5 : i + 1);
-    buf[nxt] = buf[nxt] + 1;
-  }
-  if (buf[slen - 1] == '9' + 1) {
-    buf[slen - 1] = '0';
-    buf[slen] = '1';
-    buf[slen + 1] = '\0';
-    ++slen;
-  }
-  if (sgn == -1) {
-    buf[slen] = '-';
-    buf[slen + 1] = '\0';
-    ++slen;
-  }
-  std::reverse(buf, buf + slen);
-  buf[slen - 2] = '\0';
-  return buf;
-}
-#endif
-
 void print(double x, int width) {
   char buf[50];
   sprintf(buf, "%.2f", x);
@@ -171,7 +104,6 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
   std::cout << std::endl << hline << std::endl;
   /// make content
   std::vector<uint8_t> record;
-  record.reserve(4096);
   while (!it->all_end()) {
     if (it->block_end()) {
       it->fill_next_block();

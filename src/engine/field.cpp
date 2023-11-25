@@ -43,8 +43,8 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
 /// Field DataType: INT
 
 void IntHolder::set_default_value(std::any val) {
-  if (auto x = std::any_cast<int>(&val)) {
-    value = *x;
+  if (val.type() == typeid(DType)) {
+    value = std::any_cast<DType>(std::move(val));
   } else {
     printf("ERROR: type mismatch (should be INT)\n");
     has_err = true;
@@ -54,14 +54,14 @@ void IntHolder::set_default_value(std::any val) {
 uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
-    if (int *x = std::any_cast<int>(&val)) {
-      *(int *)ptr = *x;
+    if (val.type() == typeid(DType)) {
+      *(DType *)ptr = std::any_cast<DType>(std::move(val));
     } else {
       printf("ERROR: type mismatch (should be INT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
-    *(int *)ptr = value;
+    *(DType *)ptr = value;
   } else {
     if (notnull) {
       printf("ERROR: not null constraint\n");
@@ -69,7 +69,7 @@ uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     }
     comment = 0;
   }
-  return ptr + 4;
+  return ptr + sizeof(DType);
 }
 
 void IntHolder::serialize(SequentialAccessor &s) const {
@@ -90,10 +90,10 @@ void IntHolder::deserialize(SequentialAccessor &s) {
 /// Field DataType: FLOAT
 
 void FloatHolder::set_default_value(std::any val) {
-  if (val.type() == typeid(double)) {
-    value = std::any_cast<double>(std::move(val));
-  } else if (val.type() == typeid(int)) {
-    value = std::any_cast<int>(std::move(val));
+  if (val.type() == typeid(DType)) {
+    value = std::any_cast<DType>(std::move(val));
+  } else if (val.type() == typeid(IntHolder::DType)) {
+    value = std::any_cast<IntHolder::DType>(std::move(val));
   } else {
     printf("ERROR: type mismatch (should be FLOAT)\n");
     has_err = true;
@@ -103,16 +103,16 @@ void FloatHolder::set_default_value(std::any val) {
 uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
-    if (val.type() == typeid(double)) {
-      *(double *)ptr = std::any_cast<double>(std::move(val));
-    } else if (val.type() == typeid(int)) {
-      *(double *)ptr = std::any_cast<int>(std::move(val));
+    if (val.type() == typeid(DType)) {
+      *(DType *)ptr = std::any_cast<DType>(std::move(val));
+    } else if (val.type() == typeid(IntHolder::DType)) {
+      *(DType *)ptr = std::any_cast<IntHolder::DType>(std::move(val));
     } else {
       printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
     }
   } else if (has_default_val) {
-    *(double *)ptr = value;
+    *(DType *)ptr = value;
   } else {
     if (notnull) {
       printf("ERROR: not null constraint\n");
@@ -120,7 +120,7 @@ uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
     }
     comment = 0;
   }
-  return ptr + 4;
+  return ptr + sizeof(DType);
 }
 
 void FloatHolder::serialize(SequentialAccessor &s) const {

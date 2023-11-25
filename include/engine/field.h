@@ -29,7 +29,8 @@ struct DataTypeHolderBase {
 };
 
 struct IntHolder : public DataTypeHolderBase {
-  int value;
+  using DType = int;
+  DType value;
 
   IntHolder() { type = INT; }
   void set_default_value(const std::string &s) override {
@@ -38,7 +39,7 @@ struct IntHolder : public DataTypeHolderBase {
   }
   std::string type_str() override { return "INT"; }
   std::string val_str() override { return std::to_string(value); }
-  int get_size() const override { return sizeof(int); }
+  int get_size() const override { return sizeof(DType); }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serialize(SequentialAccessor &s) const override;
@@ -46,7 +47,8 @@ struct IntHolder : public DataTypeHolderBase {
 };
 
 struct FloatHolder : public DataTypeHolderBase {
-  double value;
+  using DType = double;
+  DType value;
 
   FloatHolder() { type = FLOAT; }
   void set_default_value(const std::string &s) override {
@@ -55,7 +57,7 @@ struct FloatHolder : public DataTypeHolderBase {
   }
   std::string type_str() override { return "FLOAT"; }
   std::string val_str() override { return std::to_string(value); }
-  int get_size() const override { return sizeof(double); }
+  int get_size() const override { return sizeof(DType); }
   void set_default_value(std::any val) override;
   uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
   void serialize(SequentialAccessor &s) const override;

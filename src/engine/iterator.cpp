@@ -53,7 +53,7 @@ RecordIterator::RecordIterator(
   record_len = sizeof(bitmap_t);
   for (auto field : fields_dst_) {
     if (!field_ids_src.contains(field->field_id)) {
-      continue;
+      continue; /// ignore unrelated fields
     }
     fields_dst.push_back(field);
     record_len += field->get_size();
@@ -125,20 +125,19 @@ int RecordIterator::fill_next_block() {
     bitmap_t src_bitmap = *(const bitmap_t *)ptr_src;
 
     int dst_slot = i % record_per_page;
-    if (dst_slot == 0) {
-      current_dst_page = PagedBuffer::get()->read_file(
-          std::make_pair(fd_dst, i / record_per_page));
-      PagedBuffer::get()->mark_dirty(current_dst_page);
-    }
+    /// A bug was fixed here, always read before buffering
+    current_dst_page = PagedBuffer::get()->read_file(
+        std::make_pair(fd_dst, i / record_per_page));
+    PagedBuffer::get()->mark_dirty(current_dst_page);
     auto ptr_dst = current_dst_page + dst_slot * record_len;
     int offset_dst = sizeof(bitmap_t);
     bitmap_t dst_bitmap = 0;
-    for (int i = 0; i < fields_dst.size(); ++i) {
-      int index = fields_dst[i]->pers_index;
-      int length = fields_dst[i]->get_size();
+    for (int j = 0; j < fields_dst.size(); ++j) {
+      int index = fields_dst[j]->pers_index;
+      int length = fields_dst[j]->get_size();
       if ((src_bitmap >> index) & 1) {
-        dst_bitmap |= 1 << i;
-        memcpy(ptr_dst + offset_dst, ptr_src + fields_dst[i]->pers_offset,
+        dst_bitmap |= 1 << j;
+        memcpy(ptr_dst + offset_dst, ptr_src + fields_dst[j]->pers_offset,
                length);
       }
       offset_dst += length;
