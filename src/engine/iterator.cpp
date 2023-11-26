@@ -170,6 +170,7 @@ std::pair<int, int> RecordIterator::get_locator() {
   return std::make_pair(pagenum_src, slotnum_src);
 }
 
+/// NOTE: maintain original and new [index, offset] of fields
 JoinIterator::JoinIterator(
     std::shared_ptr<Iterator> lhs_, std::shared_ptr<Iterator> rhs_,
     const std::vector<std::shared_ptr<WhereConstraint>> &cons,
@@ -185,13 +186,22 @@ JoinIterator::JoinIterator(
   fd_dst = FileMapping::get()->create_temp_file();
 
   /// fields and constraints
-  std::set<unified_id_t> field_ids_src, field_ids_dst;
+  std::set<unified_id_t> field_ids_dst;
+  std::map<unified_id_t, std::pair<int, int>> field_ids_src;
+  int off = sizeof(bitmap_t), idx = 0;
   for (auto field : lhs->get_fields_dst()) {
-    field_ids_src.insert(field->field_id);
+    field_ids_src[field->field_id] = std::make_pair(idx, off);
+    off += field->get_size();
+    ++idx;
   }
+  off = sizeof(bitmap_t);
+  idx = 0;
   for (auto field : rhs->get_fields_dst()) {
-    field_ids_src.insert(field->field_id);
+    field_ids_src[field->field_id] = std::make_pair(idx, off);
+    off += field->get_size();
+    ++idx;
   }
+
   for (auto field : fields_dst_) {
     if (field_ids_src.contains(field->field_id))
       field_ids_dst.insert(field->field_id);
@@ -201,31 +211,40 @@ JoinIterator::JoinIterator(
         std::dynamic_pointer_cast<ColumnOpColumnConstraint>(it_cons);
     if (col_comp == nullptr)
       continue;
-    if (field_ids_src.contains(col_comp->field_id1) !=
-        field_ids_src.contains(col_comp->field_id2)) {
-      field_ids_dst.insert(col_comp->field_id1);
-      field_ids_dst.insert(col_comp->field_id2);
+    int tid1 = col_comp->table_id;
+    int tid2 = col_comp->table_id_other;
+    int fid1 = col_comp->field_id1;
+    int fid2 = col_comp->field_id2;
+    if (field_ids_src.contains(fid1) != field_ids_src.contains(fid2)) {
+      field_ids_dst.insert(fid1);
+      field_ids_dst.insert(fid2);
     }
-    int ida = col_comp->table_id;
-    int idb = col_comp->table_id_other;
-    if ((ltables.contains(ida) && rtables.contains(idb)) ||
-        (ltables.contains(idb) && rtables.contains(ida))) {
-      constraints.push_back(it_cons);
+    if ((ltables.contains(tid2) && rtables.contains(tid1))) {
+      std::swap(tid1, tid2);
+      col_comp->swap_input = true;
+    }
+    if (ltables.contains(tid1) && rtables.contains(tid2)) {
+      auto [idx1, off1] = field_ids_src[fid1];
+      auto [idx2, off2] = field_ids_src[fid2];
+      col_comp->build(idx1, off1, idx2, off2);
+      constraints.push_back(col_comp);
     }
   }
   record_len = sizeof(bitmap_t);
   for (auto field : lhs->get_fields_dst()) {
     if (field_ids_dst.contains(field->field_id)) {
-      fields_dst_lhs.push_back(field);
-      record_len += field->get_size();
       fields_dst.push_back(field);
+      fields_dst_lhs.push_back(field);
+      pos_dst_lhs.push_back(field_ids_src[field->field_id]);
+      record_len += field->get_size();
     }
   }
   for (auto field : rhs->get_fields_dst()) {
     if (field_ids_dst.contains(field->field_id)) {
-      fields_dst_rhs.push_back(field);
-      record_len += field->get_size();
       fields_dst.push_back(field);
+      fields_dst_rhs.push_back(field);
+      pos_dst_rhs.push_back(field_ids_src[field->field_id]);
+      record_len += field->get_size();
     }
   }
   record_per_page = Config::PAGE_SIZE / record_len;
@@ -292,22 +311,20 @@ int JoinIterator::fill_next_block() {
     int offset_dst = sizeof(bitmap_t);
     bitmap_t dst_bitmap = 0;
     for (int j = 0; j < fields_dst_lhs.size(); ++j) {
-      int index = fields_dst_lhs[j]->pers_index;
+      auto [index, offset] = pos_dst_lhs[j];
       int length = fields_dst_lhs[j]->get_size();
       if ((src_bitmap_lhs >> index) & 1) {
         dst_bitmap |= ((bitmap_t)1) << j;
-        memcpy(ptr_dst + offset_dst, ptr_lhs + fields_dst_lhs[j]->pers_offset,
-               length);
+        memcpy(ptr_dst + offset_dst, ptr_lhs + offset, length);
       }
       offset_dst += length;
     }
     for (int j = 0; j < fields_dst_rhs.size(); ++j) {
-      int index = fields_dst_rhs[j]->pers_index;
+      auto [index, offset] = pos_dst_rhs[j];
       int length = fields_dst_rhs[j]->get_size();
       if ((src_bitmap_rhs >> index) & 1) {
         dst_bitmap |= ((bitmap_t)1) << (j + fields_dst_lhs.size());
-        memcpy(ptr_dst + offset_dst, ptr_rhs + fields_dst_rhs[j]->pers_offset,
-               length);
+        memcpy(ptr_dst + offset_dst, ptr_rhs + offset, length);
       }
       offset_dst += length;
     }

@@ -551,6 +551,12 @@ std::any ScapeVisitor::visitWhere_operator_expression(
       return std::any();
     }
     auto other = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+    if (other->dtype_meta->type != other->dtype_meta->type) {
+      has_err = true;
+      printf("ERROR: mismatch type for %s and %s.\n", field->field_name.data(),
+             other->field_name.data());
+      return std::any();
+    }
     return std::shared_ptr<WhereConstraint>(
         new ColumnOpColumnConstraint(field, op, other));
   }

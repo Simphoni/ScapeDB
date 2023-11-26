@@ -27,6 +27,9 @@ struct Field;
 /// query.h
 struct Selector;
 struct WhereConstraint;
+struct ColumnOpValueConstraint;
+struct ColumnOpColumnConstraint;
+
 struct SetVariable;
 struct QueryPlanner;
 

@@ -27,7 +27,6 @@ protected:
 
   int fd_dst;
   std::set<unified_id_t> table_ids;
-  std::vector<std::shared_ptr<WhereConstraint>> constraints;
   std::vector<std::shared_ptr<Field>> fields_dst;
   int record_len, record_per_page;
   int n_records{0}, dst_iter{0};
@@ -68,6 +67,7 @@ private:
   uint8_t *current_src_page;
   std::shared_ptr<RecordManager> record_manager;
   std::vector<std::shared_ptr<Field>> fields_src;
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
   std::vector<int> valid_records;
   std::vector<int>::iterator it;
 
@@ -92,7 +92,9 @@ public:
 class JoinIterator : public Iterator {
 private:
   std::shared_ptr<Iterator> lhs, rhs;
+  std::vector<std::pair<int, int>> pos_dst_lhs, pos_dst_rhs;
   std::vector<std::shared_ptr<Field>> fields_dst_lhs, fields_dst_rhs;
+  std::vector<std::shared_ptr<ColumnOpColumnConstraint>> constraints;
 
 public:
   JoinIterator(std::shared_ptr<Iterator> lhs, std::shared_ptr<Iterator> rhs,

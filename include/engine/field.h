@@ -157,4 +157,10 @@ struct Field {
   std::string type_str() const { return dtype_meta->type_str(); }
   /// NOTE: returns mxlen + 1 for VARCHAR
   inline int get_size() const noexcept { return dtype_meta->get_size(); }
+  std::shared_ptr<Field> clone(int idx, int off) const {
+    auto ret = std::make_shared<Field>(*this);
+    ret->pers_index = idx;
+    ret->pers_offset = off;
+    return ret;
+  }
 };

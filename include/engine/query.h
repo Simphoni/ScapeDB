@@ -32,7 +32,6 @@ struct Selector {
 /// managed with shared_ptr
 struct WhereConstraint {
   unified_id_t table_id;
-  ConstraintType type;
 
   virtual bool check(const uint8_t *record, const uint8_t *other) const {
     return true;
@@ -54,6 +53,10 @@ struct ColumnOpValueConstraint : public WhereConstraint {
 };
 
 struct ColumnOpColumnConstraint : public WhereConstraint {
+  DataType dtype;
+  Operator optype;
+  bool swap_input{false};
+  int len;
   unified_id_t table_id_other;
   unified_id_t field_id1, field_id2;
   std::function<bool(const char *, const char *)> cmp;
@@ -61,11 +64,13 @@ struct ColumnOpColumnConstraint : public WhereConstraint {
   ColumnOpColumnConstraint(std::shared_ptr<Field> field, Operator op,
                            std::shared_ptr<Field> other);
   bool check(const uint8_t *record, const uint8_t *other) const override {
-    return cmp((char *)record, (char *)other);
+    return swap_input ? cmp((char *)other, (char *)record)
+                      : cmp((char *)record, (char *)other);
   }
   bool live_in(int table_id_) override {
     return table_id == table_id_ && table_id_other == table_id_;
   }
+  void build(int col_idx, int col_off, int col_idx_o, int col_off_o);
 };
 
 struct SetVariable {

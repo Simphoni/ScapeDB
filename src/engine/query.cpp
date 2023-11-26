@@ -268,12 +268,16 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
   table_id_other = other->table_id;
   field_id1 = field->field_id;
   field_id2 = other->field_id;
-  int col_idx = field->pers_index;
-  int col_off = field->pers_offset;
-  int col_idx_o = other->pers_index;
-  int col_off_o = other->pers_offset;
-  if (field->dtype_meta->type == DataType::INT) {
-    switch (op) {
+  dtype = field->dtype_meta->type;
+  optype = op;
+  len = std::min(field->get_size(), other->get_size());
+  assert(dtype == other->dtype_meta->type);
+}
+
+void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
+                                     int col_off_o) {
+  if (dtype == DataType::INT) {
+    switch (optype) {
     case Operator::EQ:
       cmp = [=](const char *record, const char *other) {
         return null_check(record, col_idx) && null_check(other, col_idx_o) &&
@@ -319,8 +323,8 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
     default:
       assert(false);
     }
-  } else if (field->dtype_meta->type == DataType::FLOAT) {
-    switch (op) {
+  } else if (dtype == DataType::FLOAT) {
+    switch (optype) {
     case Operator::EQ:
       cmp = [=](const char *record, const char *other) {
         return null_check(record, col_idx) && null_check(other, col_idx_o) &&
@@ -366,9 +370,9 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
     default:
       assert(false);
     }
-  } else if (field->dtype_meta->type == DataType::VARCHAR) {
-    int len = field->get_size();
-    switch (op) {
+  } else if (dtype == DataType::VARCHAR) {
+    int len = this->len;
+    switch (optype) {
     case Operator::EQ:
       cmp = [=](const char *record, const char *other) {
         if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
