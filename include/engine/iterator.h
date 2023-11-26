@@ -28,10 +28,9 @@ protected:
   int fd_dst;
   std::set<unified_id_t> table_ids;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
-  std::vector<std::shared_ptr<Field>> fields_src, fields_dst;
+  std::vector<std::shared_ptr<Field>> fields_dst;
   int record_len, record_per_page;
-  int n_records{0};
-  int dst_iter{0}, pagenum_dst{0}, slotnum_dst{0};
+  int n_records{0}, dst_iter{0};
   uint8_t *current_dst_page;
 
 public:
@@ -42,11 +41,15 @@ public:
   /// Iterator exposes fill_next_block() method that filters source data
   /// into a temporary buffer that will reside in memory during query
   /// this should speed up brute-force iterative query
-  void reset_block() { pagenum_dst = slotnum_dst = 0; }
-  void block_next();
+  void reset_block() { dst_iter = 0; }
+  void block_next() {
+    if (dst_iter == n_records)
+      return;
+    dst_iter++;
+  }
   bool block_end() const { return dst_iter == n_records; }
   bool all_end() const { return source_ended && dst_iter == n_records; }
-  void get(std::vector<uint8_t> &buf);
+  const uint8_t *get() const;
   const std::set<unified_id_t> &get_table_ids() const { return table_ids; }
   const std::vector<std::shared_ptr<Field>> &get_fields_dst() const {
     return fields_dst;
@@ -64,6 +67,7 @@ private:
   int fd_src, pagenum_src, slotnum_src;
   uint8_t *current_src_page;
   std::shared_ptr<RecordManager> record_manager;
+  std::vector<std::shared_ptr<Field>> fields_src;
   std::vector<int> valid_records;
   std::vector<int>::iterator it;
 
@@ -85,12 +89,17 @@ public:
   std::pair<int, int> get_locator();
 };
 
-class JoinedIterator : public Iterator {
+class JoinIterator : public Iterator {
 private:
   std::shared_ptr<Iterator> lhs, rhs;
+  std::vector<std::shared_ptr<Field>> fields_dst_lhs, fields_dst_rhs;
 
 public:
-  JoinedIterator(std::shared_ptr<Iterator> lhs, std::shared_ptr<Iterator> rhs,
-                 const std::vector<std::shared_ptr<WhereConstraint>> &cons,
-                 const std::vector<Field> &fields_dst);
+  JoinIterator(std::shared_ptr<Iterator> lhs, std::shared_ptr<Iterator> rhs,
+               const std::vector<std::shared_ptr<WhereConstraint>> &cons,
+               const std::vector<std::shared_ptr<Field>> &fields_dst);
+
+  bool get_next_valid() override;
+  void reset_all() override;
+  int fill_next_block() override;
 };

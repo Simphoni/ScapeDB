@@ -94,7 +94,6 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
     maxlen[i]++;
     hline += std::string(maxlen[i] + 1, '-') + "+";
   }
-  auto it = planner->iter;
   /// make header
   std::cout << hline << std::endl;
   std::cout << "|";
@@ -103,16 +102,8 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
   }
   std::cout << std::endl << hline << std::endl;
   /// make content
-  std::vector<uint8_t> record;
-  while (!it->all_end()) {
-    if (it->block_end()) {
-      it->fill_next_block();
-    }
-    if (it->all_end()) {
-      break;
-    }
-    it->get(record);
-    const uint8_t *p = record.data();
+  while (planner->next()) {
+    const uint8_t *p = planner->get();
     bitmap_t bitmap = *(bitmap_t *)p;
     p += sizeof(bitmap_t);
     std::cout << "|";
@@ -139,7 +130,6 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
     }
     std::cout << std::endl;
     ++nrow;
-    it->block_next();
   }
   std::cout << hline << std::endl;
   printf("%d rows in set\n", nrow);
@@ -150,33 +140,23 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
   const auto &field = planner->selector->columns;
   int ncol = header.size();
   int nrow = 0;
-  auto it = planner->iter;
   /// make header
   for (int i = 0; i < ncol; i++) {
     printf("%s%c", header[i].data(), i == ncol - 1 ? '\n' : ',');
   }
   /// make content
-  static std::vector<uint8_t> record;
-  record.reserve(4096);
-  while (!it->all_end()) {
-    if (it->block_end()) {
-      it->fill_next_block();
-    }
-    if (it->all_end()) {
-      break;
-    }
-    it->get(record);
-    const uint8_t *p = record.data();
+  while (planner->next()) {
+    const uint8_t *p = planner->get();
     bitmap_t bitmap = *(bitmap_t *)p;
     p += sizeof(bitmap_t);
     for (int i = 0; i < ncol; i++) {
       if ((bitmap >> i) & 1) {
         switch (field[i]->dtype_meta->type) {
         case DataType::INT:
-          printf("%d", *(int *)(p));
+          printf("%d", *(IntHolder::DType *)(p));
           break;
         case DataType::FLOAT:
-          printf("%.2f", *(double *)(p));
+          printf("%.2f", *(FloatHolder::DType *)(p));
           break;
         case DataType::VARCHAR:
           printf("%s", (char *)(p));
@@ -191,7 +171,6 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
       p += field[i]->get_size();
     }
     ++nrow;
-    it->block_next();
   }
 }
 

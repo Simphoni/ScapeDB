@@ -38,7 +38,6 @@ struct WhereConstraint {
     return true;
   }
   virtual bool live_in(int table_id_) { return table_id == table_id_; }
-  virtual bool will_need(int field_id_) { return false; }
 };
 
 struct ColumnOpValueConstraint : public WhereConstraint {
@@ -49,7 +48,9 @@ struct ColumnOpValueConstraint : public WhereConstraint {
 
   ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
                           std::any val);
-  bool check(const uint8_t *record, const uint8_t *other) const override;
+  bool check(const uint8_t *record, const uint8_t *other) const override {
+    return cmp((char *)record);
+  }
 };
 
 struct ColumnOpColumnConstraint : public WhereConstraint {
@@ -59,11 +60,12 @@ struct ColumnOpColumnConstraint : public WhereConstraint {
 
   ColumnOpColumnConstraint(std::shared_ptr<Field> field, Operator op,
                            std::shared_ptr<Field> other);
-  bool check(const uint8_t *record, const uint8_t *other) const override;
-  bool live_in(int table_id_) override {
-    return table_id == table_id_ || table_id_other == table_id_;
+  bool check(const uint8_t *record, const uint8_t *other) const override {
+    return cmp((char *)record, (char *)other);
   }
-  bool will_need(int field_id_) override { return false; }
+  bool live_in(int table_id_) override {
+    return table_id == table_id_ && table_id_other == table_id_;
+  }
 };
 
 struct SetVariable {
@@ -71,14 +73,21 @@ struct SetVariable {
   SetVariable(std::shared_ptr<Field> field, std::any &&value);
 };
 
-struct QueryPlanner {
+class QueryPlanner {
+private:
+  std::vector<std::shared_ptr<Iterator>> direct_iterators;
+  std::shared_ptr<Iterator> iter{nullptr};
+  std::vector<uint8_t> buffer;
+  std::vector<std::pair<int, int>> permute_info;
+
+public:
   std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
 
   /// engine
-  std::vector<std::shared_ptr<Iterator>> direct_iterators;
-  std::shared_ptr<Iterator> iter{nullptr};
 
   void generate_plan();
+  const uint8_t *get() const;
+  bool next();
 };

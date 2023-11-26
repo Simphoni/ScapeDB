@@ -16,10 +16,51 @@ void QueryPlanner::generate_plan() {
         new RecordIterator(tbl->get_record_manager(), constraints,
                            tbl->get_fields(), selector->columns)));
   }
-  if (direct_iterators.size() == 1) {
-    iter = direct_iterators[0];
-    return;
+  auto tmp_it = direct_iterators[0];
+  for (int i = 1; i < direct_iterators.size(); ++i) {
+    tmp_it = std::shared_ptr<JoinIterator>(new JoinIterator(
+        tmp_it, direct_iterators[i], constraints, selector->columns));
   }
+  iter = tmp_it;
+
+  std::map<unified_id_t, std::pair<int, int>> field_id_to_idx;
+  const auto &results = iter->get_fields_dst();
+  int col_offset = sizeof(bitmap_t);
+  for (size_t i = 0; i < results.size(); i++) {
+    field_id_to_idx[results[i]->field_id] = std::make_pair(i, col_offset);
+    col_offset += results[i]->get_size();
+  }
+  buffer.resize(col_offset);
+  for (auto field : selector->columns) {
+    permute_info.push_back(field_id_to_idx[field->field_id]);
+  }
+}
+
+const uint8_t *QueryPlanner::get() const { return buffer.data(); }
+
+bool QueryPlanner::next() {
+  iter->block_next();
+  if (iter->block_end()) {
+    iter->fill_next_block();
+  }
+  if (iter->all_end()) {
+    return false;
+  }
+  const uint8_t *p = iter->get();
+  uint8_t *dst = buffer.data();
+  bitmap_t bitmap_src = *(bitmap_t *)p;
+  bitmap_t bitmap_dst = 0;
+  int dst_offset = sizeof(bitmap_t);
+  for (size_t i = 0; i < permute_info.size(); ++i) {
+    auto [idx, offset] = permute_info[i];
+    if ((bitmap_src >> idx) & 1) {
+      bitmap_dst |= 1 << i;
+      memcpy(dst + dst_offset, p + offset, selector->columns[i]->get_size());
+    }
+    dst_offset += selector->columns[i]->get_size();
+  }
+  *(bitmap_t *)dst = bitmap_dst;
+  return true;
 }
 
 inline bool null_check(const char *p, int pos) {
@@ -143,7 +184,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     switch (op) {
     case Operator::EQ:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] != value[i])
@@ -154,7 +195,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::NE:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] != value[i])
@@ -165,7 +206,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::GE:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] < value[i])
@@ -178,7 +219,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::GT:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] < value[i])
@@ -191,7 +232,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::LE:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] > value[i])
@@ -204,7 +245,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       break;
     case Operator::LT:
       cmp = [=](const char *record) {
-        if (!null_check(record, col_off))
+        if (!null_check(record, col_idx))
           return false;
         for (int i = 0; i < len; ++i) {
           if (record[col_off + i] > value[i])
@@ -219,11 +260,6 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       assert(false);
     }
   }
-}
-
-bool ColumnOpValueConstraint::check(const uint8_t *record,
-                                    const uint8_t *other) const {
-  return cmp((char *)record);
 }
 
 ColumnOpColumnConstraint::ColumnOpColumnConstraint(

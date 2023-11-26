@@ -33,6 +33,7 @@ struct QueryPlanner;
 /// iterator.h
 class Iterator;
 class RecordIterator;
+class JoinIterator;
 
 typedef uint32_t unified_id_t;
 typedef uint16_t bitmap_t;
