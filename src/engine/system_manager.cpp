@@ -88,11 +88,10 @@ DatabaseManager::DatabaseManager(const std::string &name, bool from_file) {
     } else {
       int table_count = accessor.read<uint32_t>();
       for (int i = 0; i < table_count; i++) {
-        unified_id_t tbl_id = get_unified_id();
         std::string table_name = accessor.read_str();
-        auto tbl = TableManager::build(this, table_name, tbl_id);
-        tables.insert(std::make_pair(tbl_id, tbl));
-        name2id.insert(std::make_pair(table_name, tbl_id));
+        auto tbl = std::shared_ptr<TableManager>(
+            new TableManager(db_dir, table_name, get_unified_id()));
+        lookup[table_name] = tbl;
       }
     }
   }
@@ -105,38 +104,25 @@ DatabaseManager::~DatabaseManager() {
   int fd = FileMapping::get()->open_file(db_meta);
   SequentialAccessor accessor(fd);
   accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
-  accessor.write<uint32_t>(tables.size());
-  for (auto [id, tbl] : tables) {
+  accessor.write<uint32_t>(lookup.size());
+  for (auto [name, tbl] : lookup) {
     accessor.write_str(tbl->get_name());
   }
 }
 
-unified_id_t DatabaseManager::get_table_id(const std::string &s) const {
-  auto it = name2id.find(s);
-  if (it == name2id.end()) {
-    return 0;
-  }
+std::shared_ptr<TableManager>
+DatabaseManager::get_table_manager(const std::string &s) const {
+  auto it = lookup.find(s);
+  if (it == lookup.end())
+    return nullptr;
   return it->second;
 }
 
-std::shared_ptr<TableManager>
-DatabaseManager::get_table_manager(const std::string &s) const {
-  auto it = name2id.find(s);
-  if (it == name2id.end()) {
-    return nullptr;
-  }
-  auto it2 = tables.find(it->second);
-  if (it2 == tables.end()) {
-    return nullptr;
-  }
-  return it2->second;
-}
-
 void DatabaseManager::purge() {
-  for (auto &[id, tbl] : tables) {
+  for (auto &[name, tbl] : lookup) {
     tbl->purge();
   }
-  tables.clear();
+  lookup.clear();
   FileMapping::get()->purge(db_meta);
   fs::remove_all(db_dir);
   purged = true;
@@ -144,32 +130,32 @@ void DatabaseManager::purge() {
 
 void DatabaseManager::create_table(
     const std::string &name, std::vector<std::shared_ptr<Field>> &&fields) {
-  unified_id_t id = get_unified_id();
-  auto tbl = TableManager::build(this, name, id, std::move(fields));
+  if (lookup.contains(name)) {
+    return;
+  }
+  auto tbl = std::shared_ptr<TableManager>(
+      new TableManager(db_dir, name, get_unified_id(), std::move(fields)));
   if (has_err)
     return;
-  tables.insert(std::make_pair(id, tbl));
-  name2id.insert(std::make_pair(name, id));
+  lookup[name] = tbl;
 }
 
 void DatabaseManager::drop_table(const std::string &name) {
-  auto it = name2id.find(name);
-  if (it == name2id.end())
+  auto it = lookup.find(name);
+  if (it == lookup.end())
     return;
-  unified_id_t id = it->second;
-  name2id.erase(it);
-  tables[id]->purge();
-  tables.erase(id);
+  it->second->purge();
+  lookup.erase(it);
 }
 
 /// construct from persistent data
-TableManager::TableManager(DatabaseManager *par, const std::string &name,
+TableManager::TableManager(const std::string &db_dir, const std::string &name,
                            unified_id_t id)
-    : parent(par->get_name()), table_name(name), table_id(id) {
+    : table_name(name), table_id(id) {
   paged_buffer = PagedBuffer::get();
-  meta_file = fs::path(par->db_dir) / (name + ".meta");
-  data_file = fs::path(par->db_dir) / (name + ".dat");
-  index_file = fs::path(par->db_dir) / (name + ".idx");
+  meta_file = fs::path(db_dir) / (name + ".meta");
+  data_file = fs::path(db_dir) / (name + ".dat");
+  index_file = fs::path(db_dir) / (name + ".idx");
   ensure_file(meta_file);
   ensure_file(data_file);
   ensure_file(index_file);
@@ -191,18 +177,15 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
     record_len += fields[i]->get_size();
   }
   if (accessor.read_byte()) {
-    primary_key = std::make_shared<Field>(get_unified_id());
-    primary_key->deserialize(accessor);
+    primary_key = std::make_shared<FakeField>(accessor);
   }
   int foreign_key_count = accessor.read<uint32_t>();
   foreign_keys.resize(foreign_key_count);
   for (int i = 0; i < foreign_key_count; i++) {
-    foreign_keys[i] = std::make_shared<Field>(get_unified_id());
-    foreign_keys[i]->deserialize(accessor);
+    foreign_keys[i] = std::make_shared<FakeField>(accessor);
   }
   if (primary_key != nullptr) {
-    auto prikey =
-        std::dynamic_pointer_cast<PrimaryHolder>(primary_key->key_meta);
+    auto prikey = std::dynamic_pointer_cast<PrimaryKey>(primary_key->key);
     if (prikey != nullptr) {
       prikey->build(this);
     } else {
@@ -217,32 +200,28 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
 }
 
 /// construct from create_table SQL query
-TableManager::TableManager(DatabaseManager *par, const std::string &name,
+TableManager::TableManager(const std::string &db_dir, const std::string &name,
                            unified_id_t id,
                            std::vector<std::shared_ptr<Field>> &&fields_)
-    : parent(par->get_name()), table_name(name), table_id(id) {
+    : table_name(name), table_id(id) {
   paged_buffer = PagedBuffer::get();
-  meta_file = fs::path(par->db_dir) / (name + ".meta");
-  data_file = fs::path(par->db_dir) / (name + ".dat");
-  index_file = fs::path(par->db_dir) / (name + ".idx");
+  meta_file = fs::path(db_dir) / (name + ".meta");
+  data_file = fs::path(db_dir) / (name + ".dat");
+  index_file = fs::path(db_dir) / (name + ".idx");
   ensure_file(meta_file);
   ensure_file(data_file);
   ensure_file(index_file);
 
   for (auto it : std::move(fields_)) {
-    switch (it->key_meta->type) {
-    case KeyType::NORMAL:
+    if (it->fakefield == nullptr) {
       fields.push_back(it);
-      break;
-    case KeyType::PRIMARY:
-      /// primary key checking done by parser
-      primary_key = it;
-      break;
-    case KeyType::FOREIGN:
-      foreign_keys.push_back(it);
-      break;
-    default:
-      assert(false);
+    } else {
+      auto fakef = std::shared_ptr<FakeField>(new FakeField(it));
+      if (it->fakefield->type == KeyType::PRIMARY) {
+        primary_key = fakef;
+      } else if (it->fakefield->type == KeyType::FOREIGN) {
+        foreign_keys.push_back(fakef);
+      }
     }
   }
   record_len = sizeof(bitmap_t);
@@ -254,8 +233,7 @@ TableManager::TableManager(DatabaseManager *par, const std::string &name,
     record_len += fields[i]->get_size();
   }
   if (primary_key != nullptr) {
-    auto prikey =
-        std::dynamic_pointer_cast<PrimaryHolder>(primary_key->key_meta);
+    auto prikey = std::dynamic_pointer_cast<PrimaryKey>(primary_key->key);
     prikey->build(this);
     for (auto field : prikey->fields) {
       field->notnull = true;

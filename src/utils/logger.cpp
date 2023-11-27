@@ -45,7 +45,7 @@ void tabulate_batch(const std::vector<std::string> &content, int nrow,
 }
 
 void tabulate(const std::vector<std::string> &content, int nrow, int ncol) {
-  assert(content.size() == nrow * ncol);
+  assert((int)content.size() == nrow * ncol);
   if (!Config::get()->batch_mode) {
     tabulate_interactive(content, nrow, ncol);
   } else {
@@ -153,10 +153,10 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
       if ((bitmap >> i) & 1) {
         switch (field[i]->dtype_meta->type) {
         case DataType::INT:
-          printf("%d", *(IntHolder::DType *)(p));
+          printf("%d", *(IntType::DType *)(p));
           break;
         case DataType::FLOAT:
-          printf("%.2f", *(FloatHolder::DType *)(p));
+          printf("%.2f", *(FloatType::DType *)(p));
           break;
         case DataType::VARCHAR:
           printf("%s", (char *)(p));

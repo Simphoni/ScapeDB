@@ -8,8 +8,9 @@
 
 #include <engine/defs.h>
 #include <storage/defs.h>
+#include <utils/misc.h>
 
-struct DataTypeHolderBase {
+struct DataTypeBase {
   DataType type;
   bool notnull;
   bool has_default_val;
@@ -24,15 +25,15 @@ struct DataTypeHolderBase {
   virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
 
-  static std::shared_ptr<DataTypeHolderBase> build(const std::string &s);
-  static std::shared_ptr<DataTypeHolderBase> build(DataType type);
+  static std::shared_ptr<DataTypeBase> build(const std::string &s);
+  static std::shared_ptr<DataTypeBase> build(DataType type);
 };
 
-struct IntHolder : public DataTypeHolderBase {
+struct IntType : public DataTypeBase {
   using DType = int;
   DType value;
 
-  IntHolder() { type = INT; }
+  IntType() { type = INT; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stoi(s);
@@ -46,11 +47,11 @@ struct IntHolder : public DataTypeHolderBase {
   void deserialize(SequentialAccessor &s) override;
 };
 
-struct FloatHolder : public DataTypeHolderBase {
+struct FloatType : public DataTypeBase {
   using DType = double;
   DType value;
 
-  FloatHolder() { type = FLOAT; }
+  FloatType() { type = FLOAT; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stod(s);
@@ -64,11 +65,11 @@ struct FloatHolder : public DataTypeHolderBase {
   void deserialize(SequentialAccessor &s) override;
 };
 
-struct VarcharHolder : public DataTypeHolderBase {
+struct VarcharType : public DataTypeBase {
   uint32_t mxlen;
   std::string value;
 
-  VarcharHolder() { type = VARCHAR; }
+  VarcharType() { type = VARCHAR; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = s;
@@ -84,54 +85,33 @@ struct VarcharHolder : public DataTypeHolderBase {
   void deserialize(SequentialAccessor &s) override;
 };
 
-struct DummyHolder : public DataTypeHolderBase {
-  DummyHolder() { type = DataType::DUMMY; }
-
-  std::string type_str() override { return "DUMMY"; }
-  std::string val_str() override { return "[]"; }
-  int get_size() const override { return 0; }
-  void set_default_value(const std::string &s) override {}
-  void set_default_value(std::any val) override {}
-  uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override {
-    return ptr;
-  }
-  void serialize(SequentialAccessor &s) const override;
-  void deserialize(SequentialAccessor &s) override {}
-};
-
-struct KeyTypeHolderBase {
+struct KeyBase {
   KeyType type;
 
   virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
 
-  static std::shared_ptr<KeyTypeHolderBase> build(KeyType type);
+  static std::shared_ptr<KeyBase> build(KeyType type);
 };
 
-struct NormalHolder : public KeyTypeHolderBase {
-  NormalHolder() { type = NORMAL; }
-  void serialize(SequentialAccessor &s) const override;
-  void deserialize(SequentialAccessor &s) override;
-};
-
-struct PrimaryHolder : public KeyTypeHolderBase {
+struct PrimaryKey : public KeyBase {
   std::vector<std::string> field_names;
   std::vector<std::shared_ptr<Field>> fields;
 
-  PrimaryHolder() { type = PRIMARY; }
+  PrimaryKey() { type = PRIMARY; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
   void build(const TableManager *table);
 };
 
-struct ForeignHolder : public KeyTypeHolderBase {
+struct ForeignKey : public KeyBase {
   std::string ref_table_name;
   std::vector<std::string> local_field_names;
   std::vector<std::string> ref_field_names;
   std::vector<std::shared_ptr<Field>> local_fields;
   std::vector<std::shared_ptr<Field>> ref_fields;
 
-  ForeignHolder() { type = FOREIGN; }
+  ForeignKey() { type = FOREIGN; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
   void build(const TableManager *table, const DatabaseManager *db);
@@ -139,11 +119,11 @@ struct ForeignHolder : public KeyTypeHolderBase {
 
 struct Field {
   std::string field_name;
-  std::shared_ptr<DataTypeHolderBase> dtype_meta;
-  std::shared_ptr<KeyTypeHolderBase> key_meta;
-  bool notnull{false}, random_name{false};
+  std::shared_ptr<DataTypeBase> dtype_meta;
   unified_id_t field_id, table_id;
   int pers_index, pers_offset;
+  bool notnull{false}, random_name{false};
+  std::shared_ptr<KeyBase> fakefield;
 
   // we provide only basic constructors, user can freely modify other members
   Field() = delete;
@@ -152,15 +132,19 @@ struct Field {
 
   void deserialize(SequentialAccessor &s);
   void serialize(SequentialAccessor &s) const;
-  std::string to_string() const;
 
   std::string type_str() const { return dtype_meta->type_str(); }
   /// NOTE: returns mxlen + 1 for VARCHAR
   inline int get_size() const noexcept { return dtype_meta->get_size(); }
-  std::shared_ptr<Field> clone(int idx, int off) const {
-    auto ret = std::make_shared<Field>(*this);
-    ret->pers_index = idx;
-    ret->pers_offset = off;
-    return ret;
-  }
+};
+
+struct FakeField {
+  std::string name;
+  bool random_name{false};
+  std::shared_ptr<KeyBase> key;
+
+  FakeField(std::shared_ptr<Field> field);
+  FakeField(SequentialAccessor &s);
+
+  void serialize(SequentialAccessor &s) const;
 };

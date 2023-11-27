@@ -7,8 +7,8 @@
 #include <engine/system_manager.h>
 #include <storage/storage.h>
 
-using IType = IntHolder::DType;
-using FType = FloatHolder::DType;
+using IType = IntType::DType;
+using FType = FloatType::DType;
 
 void QueryPlanner::generate_plan() {
   for (auto tbl : tables) {
@@ -17,7 +17,7 @@ void QueryPlanner::generate_plan() {
                            tbl->get_fields(), selector->columns)));
   }
   auto tmp_it = direct_iterators[0];
-  for (int i = 1; i < direct_iterators.size(); ++i) {
+  for (size_t i = 1; i < direct_iterators.size(); ++i) {
     tmp_it = std::shared_ptr<JoinIterator>(new JoinIterator(
         tmp_it, direct_iterators[i], constraints, selector->columns));
   }
@@ -493,7 +493,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     }
     set = [=](char *record) {
       *(bitmap_t *)record |= 1 << col_idx;
-      *(int *)(record + col_off) = std::any_cast<int>(value_);
+      *(int *)(record + col_off) = val;
     };
   } else if (field->dtype_meta->type == FLOAT) {
     double val = 0;
@@ -508,7 +508,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     }
     set = [=](char *record) {
       *(bitmap_t *)record |= 1 << col_idx;
-      *(double *)(record + col_off) = std::any_cast<double>(value_);
+      *(double *)(record + col_off) = val;
     };
   } else if (field->dtype_meta->type == VARCHAR) {
     std::string s;

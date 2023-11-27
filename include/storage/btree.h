@@ -56,7 +56,7 @@ private:
   int leaf_max;     /// key size + record size + record(pagenum, slotnum)
   int const internal_data_len = sizeof(int);
   int leaf_data_len;
-  BPlusForest *forest;
+  BPlusForest *forest{nullptr};
 
   void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
                           uint8_t *&data) const {
@@ -90,16 +90,21 @@ private:
                       int &val_pushup);
 
 public:
-  BPlusTree(int fd, BPlusForest *forest, int pagenum_root, int key_num,
-            int record_len);
+  BPlusTree(int fd, int pagenum_root, int key_num, int record_len,
+            BPlusForest *forest);
   BPlusTree(int fd, BPlusForest *forest, SequentialAccessor &accessor);
 
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
   }
+  std::pair<int, int> get_info() {
+    return std::make_pair(key_num, leaf_data_len);
+  }
 
   std::optional<BPlusQueryResult>
   precise_match(const std::vector<int> &key) const;
+
+  BPlusQueryResult match(const std::vector<int> &key, Operator op) const;
 
   void insert(const std::vector<int> &key, const uint8_t *record);
   bool erase(const std::vector<int> &key);
@@ -128,4 +133,5 @@ public:
   std::shared_ptr<BPlusTree> create_tree(int key_num, int record_len);
 
   int get_pages_number() { return n_pages; }
+  const std::vector<std::shared_ptr<BPlusTree>> get_trees() { return trees; }
 };

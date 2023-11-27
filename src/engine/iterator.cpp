@@ -27,7 +27,7 @@ RecordIterator::RecordIterator(
   source_ended = false;
   it = valid_records.begin();
 
-  int table_id = fields_src_[0]->table_id;
+  unified_id_t table_id = fields_src_[0]->table_id;
   table_ids.insert(table_id);
   std::set<unified_id_t> field_ids_src, field_ids_dst;
   for (auto &field : fields_src) {
@@ -107,7 +107,6 @@ bool RecordIterator::get_next_valid() {
     }
     uint8_t *ptr_src = record_manager->get_record_ref(pagenum_src, slotnum_src);
     match = true;
-    bitmap_t src_bitmap = *(const bitmap_t *)ptr_src;
     for (auto constraint : constraints) {
       /// send two ptr_src for ColumnOpColumnConstraint
       if (!constraint->check(ptr_src, ptr_src)) {
@@ -141,7 +140,7 @@ int RecordIterator::fill_next_block() {
     auto ptr_dst = current_dst_page + dst_slot * record_len;
     int offset_dst = sizeof(bitmap_t);
     bitmap_t dst_bitmap = 0;
-    for (int j = 0; j < fields_dst.size(); ++j) {
+    for (size_t j = 0; j < fields_dst.size(); ++j) {
       int index = fields_dst[j]->pers_index;
       int length = fields_dst[j]->get_size();
       if ((src_bitmap >> index) & 1) {
@@ -310,7 +309,7 @@ int JoinIterator::fill_next_block() {
     auto ptr_dst = current_dst_page + dst_slot * record_len;
     int offset_dst = sizeof(bitmap_t);
     bitmap_t dst_bitmap = 0;
-    for (int j = 0; j < fields_dst_lhs.size(); ++j) {
+    for (size_t j = 0; j < fields_dst_lhs.size(); ++j) {
       auto [index, offset] = pos_dst_lhs[j];
       int length = fields_dst_lhs[j]->get_size();
       if ((src_bitmap_lhs >> index) & 1) {
@@ -319,7 +318,7 @@ int JoinIterator::fill_next_block() {
       }
       offset_dst += length;
     }
-    for (int j = 0; j < fields_dst_rhs.size(); ++j) {
+    for (size_t j = 0; j < fields_dst_rhs.size(); ++j) {
       auto [index, offset] = pos_dst_rhs[j];
       int length = fields_dst_rhs[j]->get_size();
       if ((src_bitmap_rhs >> index) & 1) {

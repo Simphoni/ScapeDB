@@ -139,7 +139,7 @@ ScapeVisitor::visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) {
 
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   if (ctx->where_and_clause() != nullptr) {
-    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    std::any ret_cons = ctx->where_and_clause()->accept(this);
     if (!ret_cons.has_value()) {
       return std::any();
     }
@@ -180,7 +180,7 @@ std::any ScapeVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
 
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   if (ctx->where_and_clause() != nullptr) {
-    std::any ret_cons = std::move(ctx->where_and_clause()->accept(this));
+    std::any ret_cons = ctx->where_and_clause()->accept(this);
     if (!ret_cons.has_value()) {
       return std::any();
     }
@@ -231,7 +231,7 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   }
   tables_stack.push_back(std::move(selected_tables));
 
-  std::any ret_sel = std::move(ctx->selectors()->accept(this));
+  std::any ret_sel = ctx->selectors()->accept(this);
   if (!ret_sel.has_value()) {
     return std::any();
   }
@@ -267,7 +267,9 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
       return std::any();
     }
     fields.push_back(std::any_cast<std::shared_ptr<Field>>(std::move(f)));
-    n_primary += fields.back()->key_meta->type == KeyType::PRIMARY;
+    if (fields.back()->fakefield != nullptr) {
+      n_primary += fields.back()->fakefield->type == KeyType::PRIMARY;
+    }
   }
   if (n_primary > 1) {
     has_err = true;
@@ -281,8 +283,7 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   std::shared_ptr<Field> field =
       std::make_shared<Field>(ctx->Identifier()->getText(), get_unified_id());
-  field->dtype_meta = DataTypeHolderBase::build(ctx->type_()->getText());
-  field->key_meta = KeyTypeHolderBase::build(KeyType::NORMAL);
+  field->dtype_meta = DataTypeBase::build(ctx->type_()->getText());
   if (ctx->Null() != nullptr) {
     field->notnull = true;
   }
@@ -304,16 +305,15 @@ std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
 std::any
 ScapeVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
   std::shared_ptr<Field> field = std::make_shared<Field>(get_unified_id());
-  field->dtype_meta = std::make_shared<DummyHolder>();
-  field->key_meta = KeyTypeHolderBase::build(KeyType::PRIMARY);
-  auto primary = std::dynamic_pointer_cast<PrimaryHolder>(field->key_meta);
+  field->fakefield = KeyBase::build(KeyType::PRIMARY);
+  auto primary = std::dynamic_pointer_cast<PrimaryKey>(field->fakefield);
   primary->field_names =
       std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
   if (ctx->Identifier() != nullptr) {
     field->field_name = ctx->Identifier()->getText();
   } else {
     field->random_name = true;
-    field->field_name = generate_random_string();
+    field->field_name = "";
   }
   return field;
 }
@@ -323,15 +323,14 @@ ScapeVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
 std::any
 ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
   std::shared_ptr<Field> field = std::make_shared<Field>(get_unified_id());
-  field->dtype_meta = std::make_shared<DummyHolder>();
-  field->key_meta = KeyTypeHolderBase::build(KeyType::FOREIGN);
-  auto foreign = std::dynamic_pointer_cast<ForeignHolder>(field->key_meta);
+  field->fakefield = KeyBase::build(KeyType::FOREIGN);
+  auto foreign = std::dynamic_pointer_cast<ForeignKey>(field->fakefield);
   foreign->ref_table_name = ctx->Identifier().back()->getText();
   if (ctx->Identifier().size() == 2) {
     field->field_name = ctx->Identifier().front()->getText();
   } else {
     field->random_name = true;
-    field->field_name = generate_random_string();
+    field->field_name = "";
   }
   if (ctx->identifiers().size() != 2) {
     has_err = true;
@@ -406,11 +405,11 @@ std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
   std::vector<Aggregator> aggrs;
   /// perform a gathering operation, like transpose
   for (auto sel : ctx->selector()) {
-    auto ret = std::move(sel->accept(this));
+    auto ret = sel->accept(this);
     if (!ret.has_value()) {
       return std::any();
     }
-    selector_ret_t tmp = std::move(std::any_cast<selector_ret_t>(ret));
+    selector_ret_t tmp = std::any_cast<selector_ret_t>(ret);
     header.push_back(std::move(std::get<0>(tmp)));
     fields.push_back(std::move(std::get<1>(tmp)));
     aggrs.push_back(std::move(std::get<2>(tmp)));
@@ -446,7 +445,7 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
 
   /// TODO: this is a workaround for current judger
   std::string s = ctx->column()->getText();
-  int dot = s.find('.');
+  auto dot = s.find('.');
   std::string caption;
   if (dot == std::string::npos) {
     caption = s;
@@ -470,7 +469,7 @@ std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
 /// (Identifier '.')? Identifier
 std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
   std::string col = ctx->getText();
-  int dot = col.find('.');
+  auto dot = col.find('.');
   const auto &selected_tables = tables_stack.back();
   if (dot == std::string::npos) {
     int num = 0;
@@ -517,7 +516,7 @@ std::any
 ScapeVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) {
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
   for (auto cons : ctx->where_clause()) {
-    auto ret = std::move(cons->accept(this));
+    auto ret = cons->accept(this);
     if (!ret.has_value()) {
       return std::any();
     }

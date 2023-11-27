@@ -410,6 +410,27 @@ BPlusTree::precise_match(const std::vector<int> &key) const {
     }
   }
 }
+// TODO: rewrite this
+BPlusQueryResult BPlusTree::match(const std::vector<int> &key,
+                                  Operator op) const {
+  assert(op != Operator::NE && op != Operator::EQ);
+  int pagenum_cur = pagenum_root;
+  while (true) {
+    uint8_t *slice =
+        PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+    BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
+    int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
+    int *data = keys + key_num * get_cap(meta->type);
+    if (meta->type == NodeType::LEAF) {
+      int idx = bin_search(keys, meta->size, key, op);
+      return (BPlusQueryResult){pagenum_cur, idx,
+                                ((uint8_t *)data) + leaf_data_len * idx};
+    } else {
+      int idx = bin_search(keys, meta->size, key, Operator::LE);
+      pagenum_cur = data[idx];
+    }
+  }
+}
 
 int BPlusForest::alloc_page() {
   if (ptr_available == -1) {
@@ -455,10 +476,10 @@ BPlusTree::BPlusTree(int fd, BPlusForest *forest, SequentialAccessor &accessor)
   leaf_max = accessor.read<uint32_t>();
 }
 
-BPlusTree::BPlusTree(int fd, BPlusForest *forest, int pagenum_root, int key_num,
-                     int record_len)
-    : fd(fd), forest(forest), pagenum_root(pagenum_root), key_num(key_num),
-      leaf_data_len(record_len) {
+BPlusTree::BPlusTree(int fd, int pagenum_root, int key_num, int record_len,
+                     BPlusForest *forest)
+    : fd(fd), pagenum_root(pagenum_root), key_num(key_num),
+      leaf_data_len(record_len), forest(forest) {
   internal_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
                  (sizeof(int) * (key_num + 1));
   leaf_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
@@ -482,7 +503,7 @@ std::shared_ptr<BPlusTree> BPlusForest::create_tree(int key_num,
   BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
   meta->reset();
   meta->type = NodeType::LEAF;
-  auto ptr = std::make_shared<BPlusTree>(fd, this, rt, key_num, record_len);
+  auto ptr = std::make_shared<BPlusTree>(fd, rt, key_num, record_len, this);
   trees.push_back(ptr);
   std::vector<int> minimal = std::vector<int>(key_num, INT_MIN);
   ptr->insert(minimal, bbuf);

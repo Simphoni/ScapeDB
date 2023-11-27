@@ -48,8 +48,7 @@ private:
   std::shared_ptr<FileMapping> file_manager;
 
   std::string db_name, db_dir, db_meta;
-  std::map<unified_id_t, std::shared_ptr<TableManager>> tables;
-  std::unordered_map<std::string, unified_id_t> name2id;
+  std::map<std::string, std::shared_ptr<TableManager>> lookup;
   bool purged{false};
 
   DatabaseManager(const std::string &name, bool from_file);
@@ -63,15 +62,14 @@ public:
   }
 
   inline std::string get_name() const noexcept { return db_name; }
-  const std::map<unified_id_t, std::shared_ptr<TableManager>> &
+  const std::map<std::string, std::shared_ptr<TableManager>> &
   get_tables() const {
-    return tables;
+    return lookup;
   }
 
   void create_table(const std::string &name,
                     std::vector<std::shared_ptr<Field>> &&fields);
   void drop_table(const std::string &name);
-  unified_id_t get_table_id(const std::string &s) const;
   std::shared_ptr<TableManager> get_table_manager(const std::string &s) const;
 
   void purge();
@@ -83,37 +81,27 @@ private:
   std::string table_name;
   std::string meta_file, data_file, index_file;
   std::shared_ptr<PagedBuffer> paged_buffer;
-  std::string parent;
 
   std::vector<std::shared_ptr<Field>> fields;
   /// constraints
-  std::shared_ptr<Field> primary_key;
-  std::vector<std::shared_ptr<Field>> foreign_keys;
+  std::shared_ptr<FakeField> primary_key;
+  std::vector<std::shared_ptr<FakeField>> foreign_keys;
 
   std::unordered_map<std::string, std::shared_ptr<Field>> name2col;
   bool purged{false};
 
-  uint32_t record_len;
+  int record_len;
   std::shared_ptr<RecordManager> record_manager;
 
   int table_id;
 
-  TableManager(DatabaseManager *par, const std::string &name, unified_id_t id);
-  TableManager(DatabaseManager *par, const std::string &name, unified_id_t id,
-               std::vector<std::shared_ptr<Field>> &&fields);
-
 public:
+  TableManager(const std::string &db_dir, const std::string &name,
+               unified_id_t id);
+  TableManager(const std::string &db_dir, const std::string &name,
+               unified_id_t id, std::vector<std::shared_ptr<Field>> &&fields);
+
   ~TableManager();
-  static std::shared_ptr<TableManager>
-  build(DatabaseManager *par, const std::string &name, unified_id_t id) {
-    return std::shared_ptr<TableManager>(new TableManager(par, name, id));
-  }
-  static std::shared_ptr<TableManager>
-  build(DatabaseManager *par, const std::string &name, unified_id_t id,
-        std::vector<std::shared_ptr<Field>> &&fields) {
-    return std::shared_ptr<TableManager>(
-        new TableManager(par, name, id, std::move(fields)));
-  }
 
   inline std::string get_name() const noexcept { return table_name; }
   const std::vector<std::shared_ptr<Field>> &get_fields() const {
@@ -121,8 +109,8 @@ public:
   }
   std::shared_ptr<Field> get_field(const std::string &s) const;
 
-  std::shared_ptr<Field> get_primary_key() const { return primary_key; }
-  const std::vector<std::shared_ptr<Field>> &get_foreign_keys() const {
+  std::shared_ptr<FakeField> get_primary_key() const { return primary_key; }
+  const std::vector<std::shared_ptr<FakeField>> &get_foreign_keys() const {
     return foreign_keys;
   }
 

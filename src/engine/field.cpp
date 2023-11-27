@@ -10,14 +10,13 @@
 uint64_t cast_f2i(double x) { return *reinterpret_cast<uint64_t *>(&x); }
 double cast_i2f(uint64_t x) { return *reinterpret_cast<double *>(&x); }
 
-std::shared_ptr<DataTypeHolderBase>
-DataTypeHolderBase::build(const std::string &s) {
+std::shared_ptr<DataTypeBase> DataTypeBase::build(const std::string &s) {
   if (s == "INT") {
-    return std::make_shared<IntHolder>();
+    return std::make_shared<IntType>();
   } else if (s == "FLOAT") {
-    return std::make_shared<FloatHolder>();
+    return std::make_shared<FloatType>();
   } else if (std::string_view(s.data(), 7) == "VARCHAR") {
-    auto ret = std::make_shared<VarcharHolder>();
+    auto ret = std::make_shared<VarcharType>();
     ret->mxlen = std::stoi(std::string(s.begin() + 8, s.end() - 1));
     return ret;
   } else {
@@ -25,16 +24,14 @@ DataTypeHolderBase::build(const std::string &s) {
   }
 }
 
-std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
+std::shared_ptr<DataTypeBase> DataTypeBase::build(DataType type) {
   switch (type) {
   case INT:
-    return std::make_shared<IntHolder>();
+    return std::make_shared<IntType>();
   case FLOAT:
-    return std::make_shared<FloatHolder>();
+    return std::make_shared<FloatType>();
   case VARCHAR:
-    return std::make_shared<VarcharHolder>();
-  case DUMMY:
-    return std::make_shared<DummyHolder>();
+    return std::make_shared<VarcharType>();
   default:
     assert(false);
   }
@@ -42,7 +39,7 @@ std::shared_ptr<DataTypeHolderBase> DataTypeHolderBase::build(DataType type) {
 
 /// Field DataType: INT
 
-void IntHolder::set_default_value(std::any val) {
+void IntType::set_default_value(std::any val) {
   if (val.type() == typeid(DType)) {
     value = std::any_cast<DType>(std::move(val));
   } else {
@@ -51,7 +48,7 @@ void IntHolder::set_default_value(std::any val) {
   }
 }
 
-uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+uint8_t *IntType::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
     if (val.type() == typeid(DType)) {
@@ -72,7 +69,7 @@ uint8_t *IntHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + sizeof(DType);
 }
 
-void IntHolder::serialize(SequentialAccessor &s) const {
+void IntType::serialize(SequentialAccessor &s) const {
   s.write_byte(INT);
   s.write_byte(has_default_val);
   if (has_default_val) {
@@ -80,7 +77,7 @@ void IntHolder::serialize(SequentialAccessor &s) const {
   }
 }
 
-void IntHolder::deserialize(SequentialAccessor &s) {
+void IntType::deserialize(SequentialAccessor &s) {
   has_default_val = s.read_byte();
   if (has_default_val) {
     value = s.read<uint32_t>();
@@ -89,24 +86,24 @@ void IntHolder::deserialize(SequentialAccessor &s) {
 
 /// Field DataType: FLOAT
 
-void FloatHolder::set_default_value(std::any val) {
+void FloatType::set_default_value(std::any val) {
   if (val.type() == typeid(DType)) {
     value = std::any_cast<DType>(std::move(val));
-  } else if (val.type() == typeid(IntHolder::DType)) {
-    value = std::any_cast<IntHolder::DType>(std::move(val));
+  } else if (val.type() == typeid(IntType::DType)) {
+    value = std::any_cast<IntType::DType>(std::move(val));
   } else {
     printf("ERROR: type mismatch (should be FLOAT)\n");
     has_err = true;
   }
 }
 
-uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+uint8_t *FloatType::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   if (val.has_value()) {
     if (val.type() == typeid(DType)) {
       *(DType *)ptr = std::any_cast<DType>(std::move(val));
-    } else if (val.type() == typeid(IntHolder::DType)) {
-      *(DType *)ptr = std::any_cast<IntHolder::DType>(std::move(val));
+    } else if (val.type() == typeid(IntType::DType)) {
+      *(DType *)ptr = std::any_cast<IntType::DType>(std::move(val));
     } else {
       printf("ERROR: type mismatch (should be FLOAT)\n");
       has_err = true;
@@ -123,7 +120,7 @@ uint8_t *FloatHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + sizeof(DType);
 }
 
-void FloatHolder::serialize(SequentialAccessor &s) const {
+void FloatType::serialize(SequentialAccessor &s) const {
   s.write_byte(FLOAT);
   s.write_byte(has_default_val);
   if (has_default_val) {
@@ -131,7 +128,7 @@ void FloatHolder::serialize(SequentialAccessor &s) const {
   }
 }
 
-void FloatHolder::deserialize(SequentialAccessor &s) {
+void FloatType::deserialize(SequentialAccessor &s) {
   has_default_val = s.read_byte();
   if (has_default_val) {
     value = cast_i2f(s.read<uint32_t>());
@@ -140,7 +137,7 @@ void FloatHolder::deserialize(SequentialAccessor &s) {
 
 /// Field DataType: VARCHAR
 
-void VarcharHolder::set_default_value(std::any val) {
+void VarcharType::set_default_value(std::any val) {
   if (auto x = std::any_cast<std::string>(&val)) {
     value = *x;
   } else {
@@ -149,7 +146,7 @@ void VarcharHolder::set_default_value(std::any val) {
   }
 }
 
-uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
+uint8_t *VarcharType::write_buf(uint8_t *ptr, std::any val, int &comment) {
   comment = 1;
   memset(ptr, 0, mxlen + 1);
   if (val.has_value()) {
@@ -177,7 +174,7 @@ uint8_t *VarcharHolder::write_buf(uint8_t *ptr, std::any val, int &comment) {
   return ptr + mxlen + 1;
 }
 
-void VarcharHolder::serialize(SequentialAccessor &s) const {
+void VarcharType::serialize(SequentialAccessor &s) const {
   s.write_byte(VARCHAR);
   s.write<uint32_t>(mxlen);
   s.write_byte(has_default_val);
@@ -186,7 +183,7 @@ void VarcharHolder::serialize(SequentialAccessor &s) const {
   }
 }
 
-void VarcharHolder::deserialize(SequentialAccessor &s) {
+void VarcharType::deserialize(SequentialAccessor &s) {
   mxlen = s.read<uint32_t>();
   has_default_val = s.read_byte();
   if (has_default_val) {
@@ -194,30 +191,18 @@ void VarcharHolder::deserialize(SequentialAccessor &s) {
   }
 }
 
-void DummyHolder::serialize(SequentialAccessor &s) const {
-  s.write_byte(DataType::DUMMY);
-}
-
-std::shared_ptr<KeyTypeHolderBase> KeyTypeHolderBase::build(KeyType type) {
+std::shared_ptr<KeyBase> KeyBase::build(KeyType type) {
   switch (type) {
-  case KeyType::NORMAL:
-    return std::make_shared<NormalHolder>();
   case KeyType::PRIMARY:
-    return std::make_shared<PrimaryHolder>();
+    return std::make_shared<PrimaryKey>();
   case KeyType::FOREIGN:
-    return std::make_shared<ForeignHolder>();
+    return std::make_shared<ForeignKey>();
   default:
     assert(false);
   }
 }
 
-void NormalHolder::serialize(SequentialAccessor &s) const {
-  s.write_byte(NORMAL);
-}
-
-void NormalHolder::deserialize(SequentialAccessor &s) {}
-
-void PrimaryHolder::serialize(SequentialAccessor &s) const {
+void PrimaryKey::serialize(SequentialAccessor &s) const {
   s.write_byte(PRIMARY);
   s.write<uint32_t>(field_names.size());
   for (auto &str : field_names) {
@@ -225,14 +210,14 @@ void PrimaryHolder::serialize(SequentialAccessor &s) const {
   }
 }
 
-void PrimaryHolder::deserialize(SequentialAccessor &s) {
+void PrimaryKey::deserialize(SequentialAccessor &s) {
   uint32_t sz = s.read<uint32_t>();
   for (uint32_t i = 0; i < sz; ++i) {
     field_names.push_back(s.read_str());
   }
 }
 
-void PrimaryHolder::build(const TableManager *table) {
+void PrimaryKey::build(const TableManager *table) {
   for (auto &str : field_names) {
     auto field = table->get_field(str);
     if (field == nullptr) {
@@ -244,7 +229,7 @@ void PrimaryHolder::build(const TableManager *table) {
   }
 }
 
-void ForeignHolder::serialize(SequentialAccessor &s) const {
+void ForeignKey::serialize(SequentialAccessor &s) const {
   s.write_byte(FOREIGN);
   s.write<uint32_t>(local_field_names.size());
   for (auto &str : local_field_names) {
@@ -257,7 +242,7 @@ void ForeignHolder::serialize(SequentialAccessor &s) const {
   }
 }
 
-void ForeignHolder::deserialize(SequentialAccessor &s) {
+void ForeignKey::deserialize(SequentialAccessor &s) {
   uint32_t sz = s.read<uint32_t>();
   for (uint32_t i = 0; i < sz; ++i) {
     local_field_names.push_back(s.read_str());
@@ -269,8 +254,7 @@ void ForeignHolder::deserialize(SequentialAccessor &s) {
   }
 }
 
-void ForeignHolder::build(const TableManager *table,
-                          const DatabaseManager *db) {
+void ForeignKey::build(const TableManager *table, const DatabaseManager *db) {
   for (auto &str : local_field_names) {
     auto field = table->get_field(str);
     if (field == nullptr) {
@@ -305,24 +289,31 @@ void Field::serialize(SequentialAccessor &s) const {
   s.write_byte(notnull);
   s.write_byte(random_name);
   dtype_meta->serialize(s);
-  key_meta->serialize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
   notnull = s.read_byte();
   random_name = s.read_byte();
-  dtype_meta = DataTypeHolderBase::build(DataType(s.read_byte()));
+  dtype_meta = DataTypeBase::build(DataType(s.read_byte()));
   dtype_meta->deserialize(s);
-  key_meta = KeyTypeHolderBase::build(KeyType(s.read_byte()));
-  key_meta->deserialize(s);
 }
 
-std::string Field::to_string() const {
-  std::string ret = field_name + "(" + datatype2str(dtype_meta->type);
-  if (notnull)
-    ret += " NOT NULL";
-  if (dtype_meta->has_default_val)
-    ret += " DEFAULT " + dtype_meta->val_str();
-  return ret + ")";
+FakeField::FakeField(std::shared_ptr<Field> field)
+    : random_name(field->random_name), key(field->fakefield) {
+  this->name =
+      random_name ? "fake_" + generate_random_string() : field->field_name;
+}
+
+FakeField::FakeField(SequentialAccessor &s) {
+  name = s.read_str();
+  random_name = s.read_byte();
+  key = KeyBase::build(KeyType(s.read_byte()));
+  key->deserialize(s);
+}
+
+void FakeField::serialize(SequentialAccessor &s) const {
+  s.write_str(name);
+  s.write_byte(random_name);
+  key->serialize(s);
 }

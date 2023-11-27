@@ -74,7 +74,7 @@ void create_table(const std::string &s,
     printf("ERROR: no database selected\n");
     return;
   }
-  if (db->get_table_id(s) != 0) {
+  if (db->get_table_manager(s) != nullptr) {
     printf("ERROR: table %s already exists\n", s.data());
   } else {
     db->create_table(s, std::move(fields));
@@ -87,7 +87,7 @@ void drop_table(const std::string &s) {
     printf("ERROR: no database selected\n");
     return;
   }
-  if (db->get_table_id(s) == 0) {
+  if (db->get_table_manager(s) == nullptr) {
     printf("ERROR: table %s does not exist\n", s.data());
   } else {
     db->drop_table(s);
@@ -96,7 +96,7 @@ void drop_table(const std::string &s) {
 
 static void print_list(const std::vector<std::string> &s) {
   putchar('(');
-  for (int i = 0; i < s.size(); ++i) {
+  for (size_t i = 0; i < s.size(); ++i) {
     if (i != 0)
       printf(", ");
     printf("%s", s[i].data());
@@ -110,12 +110,11 @@ void describe_table(const std::string &s) {
     printf("ERROR: no database selected\n");
     return;
   }
-  unified_id_t id = db->get_table_id(s);
-  if (id == 0) {
+  auto tbl = db->get_table_manager(s);
+  if (tbl == nullptr) {
     printf("ERROR: table %s does not exist\n", s.data());
     return;
   }
-  auto tbl = db->get_tables().at(id);
   const auto &fields = tbl->get_fields();
   std::vector<std::string> table{"Field", "Type", "Null", "Default"};
   table.reserve(fields.size() * 4 + 4);
@@ -136,23 +135,22 @@ void describe_table(const std::string &s) {
   }
   auto prikey = tbl->get_primary_key();
   if (prikey != nullptr) {
-    auto key_detail =
-        std::dynamic_pointer_cast<PrimaryHolder>(prikey->key_meta);
+    auto key_detail = std::dynamic_pointer_cast<PrimaryKey>(prikey->key);
     assert(key_detail != nullptr);
     printf("PRIMARY KEY ");
     if (!prikey->random_name) {
-      printf("%s", prikey->field_name.data());
+      printf("%s", prikey->name.data());
     }
     print_list(key_detail->field_names);
     puts(";");
   }
   auto foreign_keys = tbl->get_foreign_keys();
   for (auto key : foreign_keys) {
-    auto key_detail = std::dynamic_pointer_cast<ForeignHolder>(key->key_meta);
+    auto key_detail = std::dynamic_pointer_cast<ForeignKey>(key->key);
     assert(key_detail != nullptr);
     printf("FOREIGN KEY ");
     if (!key->random_name) {
-      printf("%s", key->field_name.data());
+      printf("%s", key->name.data());
     }
     print_list(key_detail->local_field_names);
     printf(" REFERENCES %s", key_detail->ref_table_name.data());
@@ -181,7 +179,7 @@ void update_set_table(
   auto record_iter = std::make_shared<RecordIterator>(
       record_manager, where_constraints, table->get_fields(),
       std::vector<std::shared_ptr<Field>>({}));
-  int modified_rows = 0;
+  [[maybe_unused]] int modified_rows = 0;
   while (record_iter->get_next_valid()) {
     auto [pagenum, slotnum] = record_iter->get_locator();
     auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
@@ -208,10 +206,11 @@ void delete_from_table(
   auto record_iter = std::make_shared<RecordIterator>(
       record_manager, where_constraints, table->get_fields(),
       std::vector<std::shared_ptr<Field>>({}));
-  int modified_rows = 0;
+  [[maybe_unused]] int modified_rows = 0;
   while (record_iter->get_next_valid()) {
     auto [pagenum, slotnum] = record_iter->get_locator();
-    auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
+    [[maybe_unused]] auto record_ref =
+        record_manager->get_record_ref(pagenum, slotnum);
     /// TODO: perform checking
     record_manager->erase_record(pagenum, slotnum);
     modified_rows++;

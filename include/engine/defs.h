@@ -12,16 +12,18 @@ class TableManager;
 /// record.h
 class RecordManager;
 
+/// index.h
+class IndexManager;
+
 /// field.h
-struct DataTypeHolderBase;
-struct IntHolder;
-struct FloatHolder;
-struct VarcharHolder;
-struct DummyHolder;
-struct KeyTypeHolderBase;
+struct DataTypeBase;
+struct IntType;
+struct FloatType;
+struct VarcharType;
+struct KeyBase;
 struct NormalHolder;
-struct PrimaryHolder;
-struct ForeignHolder;
+struct PrimaryKey;
+struct ForeignKey;
 struct Field;
 
 /// query.h
@@ -31,7 +33,7 @@ struct ColumnOpValueConstraint;
 struct ColumnOpColumnConstraint;
 
 struct SetVariable;
-struct QueryPlanner;
+class QueryPlanner;
 
 /// iterator.h
 class Iterator;
@@ -49,14 +51,12 @@ enum DataType : uint8_t {
   INT = 1,
   FLOAT,
   VARCHAR,
-  DUMMY,
 };
 
 std::string datatype2str(DataType type);
 
 enum KeyType : uint8_t {
-  NORMAL = 1,
-  PRIMARY,
+  PRIMARY = 1,
   FOREIGN,
 };
 

@@ -152,7 +152,7 @@ template <typename T> T SequentialAccessor::read() {
     ret = *(T *)cur;
     cur += sizeof(T);
   } else {
-    for (int i = 0; i < sizeof(T); i++) {
+    for (size_t i = 0; i < sizeof(T); i++) {
       ret |= read_byte() << (i << 3);
     }
   }
@@ -185,7 +185,7 @@ template <typename T> void SequentialAccessor::write(T val) {
     *(T *)cur = val;
     cur += sizeof(T);
   } else {
-    for (int i = 0; i < sizeof(T); i++) {
+    for (size_t i = 0; i < sizeof(T); i++) {
       write_byte(val & 0xff);
       val >>= 8;
     }

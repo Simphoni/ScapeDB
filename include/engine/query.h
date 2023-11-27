@@ -36,7 +36,7 @@ struct WhereConstraint {
   virtual bool check(const uint8_t *record, const uint8_t *other) const {
     return true;
   }
-  virtual bool live_in(int table_id_) { return table_id == table_id_; }
+  virtual bool live_in(unified_id_t table_id_) { return table_id == table_id_; }
 };
 
 struct ColumnOpValueConstraint : public WhereConstraint {
@@ -67,7 +67,7 @@ struct ColumnOpColumnConstraint : public WhereConstraint {
     return swap_input ? cmp((char *)other, (char *)record)
                       : cmp((char *)record, (char *)other);
   }
-  bool live_in(int table_id_) override {
+  bool live_in(unified_id_t table_id_) override {
     return table_id == table_id_ && table_id_other == table_id_;
   }
   void build(int col_idx, int col_off, int col_idx_o, int col_off_o);

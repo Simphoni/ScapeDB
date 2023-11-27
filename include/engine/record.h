@@ -58,13 +58,13 @@ private:
   std::string filename;
   int fd;
 
-  uint32_t record_len;
-  uint32_t records_per_page;
-  uint32_t headmask_size;
-  uint32_t header_len;
+  int record_len;
+  int records_per_page;
+  int headmask_size;
+  int header_len;
 
   /// needs persistent storage
-  uint32_t n_pages;
+  int n_pages;
   int ptr_available;
 
   uint8_t *current_page;

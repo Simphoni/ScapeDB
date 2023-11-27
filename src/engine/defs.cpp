@@ -36,8 +36,6 @@ std::string datatype2str(DataType type) {
 
 std::string keytype2str(KeyType type) {
   switch (type) {
-  case NORMAL:
-    return "NORMAL";
   case PRIMARY:
     return "PRIMARY";
   case FOREIGN:
