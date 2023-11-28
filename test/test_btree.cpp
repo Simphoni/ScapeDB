@@ -20,8 +20,8 @@ TEST(btree, RootUpdate) {
   int record_len = 12 + rand() % 32;
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
-  auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(0, key_num, record_len);
+  auto fn = FileMapping::get()->get_filename(fd);
+  auto btree = std::make_shared<BPlusTree>(fn, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -35,7 +35,7 @@ TEST(btree, RootUpdate) {
   for (int i = 0; i < n; i++) {
     auto ret = btree->precise_match(key[i]);
     ASSERT_TRUE(ret.has_value());
-    uint8_t *p = ret.value().ptr;
+    uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
       ASSERT_EQ(p[j], rec[i][j]);
     }
@@ -49,8 +49,8 @@ TEST(btree, LeafSplit_InternalInsert) {
   int record_len = 12 + rand() % 32;
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
-  auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(0, key_num, record_len);
+  auto fn = FileMapping::get()->get_filename(fd);
+  auto btree = std::make_shared<BPlusTree>(fn, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -64,12 +64,11 @@ TEST(btree, LeafSplit_InternalInsert) {
   for (int i = 0; i < n; i++) {
     auto ret = btree->precise_match(key[i]);
     ASSERT_TRUE(ret.has_value());
-    uint8_t *p = ret.value().ptr;
+    uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
       ASSERT_EQ(p[j], rec[i][j]);
     }
   }
-  delete bforest;
 }
 
 TEST(btree, InternalSplit) {
@@ -81,8 +80,8 @@ TEST(btree, InternalSplit) {
   int record_len = 256 + rand() % 256;
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
-  auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(0, key_num, record_len);
+  auto fn = FileMapping::get()->get_filename(fd);
+  auto btree = std::make_shared<BPlusTree>(fn, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -96,12 +95,11 @@ TEST(btree, InternalSplit) {
   for (int i = 0; i < n; i++) {
     auto ret = btree->precise_match(key[i]);
     ASSERT_TRUE(ret.has_value());
-    uint8_t *p = ret.value().ptr;
+    uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
       ASSERT_EQ(p[j], rec[i][j]);
     }
   }
-  delete bforest;
 }
 
 TEST(btree, Erase) {
@@ -113,8 +111,8 @@ TEST(btree, Erase) {
   int record_len = 256 + rand() % 256;
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
-  auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(0, key_num, record_len);
+  auto fn = FileMapping::get()->get_filename(fd);
+  auto btree = std::make_shared<BPlusTree>(fn, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -130,7 +128,7 @@ TEST(btree, Erase) {
     if (inserted[i]) {
       auto ret = btree->precise_match(key[i]);
       ASSERT_TRUE(ret.has_value());
-      uint8_t *p = ret.value().ptr;
+      uint8_t *p = ret.value().dataptr;
       for (int j = 0; j < record_len; j++) {
         ASSERT_EQ(p[j], rec[i][j]);
       }
@@ -143,5 +141,4 @@ TEST(btree, Erase) {
       inserted[i] = true;
     }
   }
-  delete bforest;
 }

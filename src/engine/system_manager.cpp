@@ -133,10 +133,9 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(db_dir) / (name + ".meta");
   data_file = fs::path(db_dir) / (name + ".dat");
-  index_file = fs::path(db_dir) / (name + ".idx");
+  index_prefix = fs::path(db_dir) / (name + ".idx.");
   ensure_file(meta_file);
   ensure_file(data_file);
-  ensure_file(index_file);
   record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
@@ -184,10 +183,9 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(db_dir) / (name + ".meta");
   data_file = fs::path(db_dir) / (name + ".dat");
-  index_file = fs::path(db_dir) / (name + ".idx");
+  index_prefix = fs::path(db_dir) / (name + ".idx");
   ensure_file(meta_file);
   ensure_file(data_file);
-  ensure_file(index_file);
 
   for (auto it : std::move(fields_)) {
     if (it->fakefield == nullptr) {
@@ -219,7 +217,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   record_manager =
       std::shared_ptr<RecordManager>(new RecordManager(data_file, record_len));
   index_manager =
-      std::shared_ptr<IndexManager>(new IndexManager(index_file, record_len));
+      std::shared_ptr<IndexManager>(new IndexManager(index_prefix, record_len));
 }
 
 TableManager::~TableManager() {
@@ -255,7 +253,6 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
 void TableManager::purge() {
   FileMapping::get()->purge(meta_file);
   FileMapping::get()->purge(data_file);
-  FileMapping::get()->purge(index_file);
   purged = true;
 }
 
@@ -278,4 +275,10 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
   }
   *(bitmap_t *)ptr = bitmap;
   record_manager->insert_record(ptr);
+}
+
+void TableManager::check_insert_valid(uint8_t *ptr) {
+  if (primary_key != nullptr) {
+    // auto ret = primary_key->key->bounded_match(ptr);
+  }
 }

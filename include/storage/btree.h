@@ -20,7 +20,8 @@ enum NodeType : uint8_t {
 struct BPlusQueryResult {
   int pagenum;
   int slotnum;
-  uint8_t *ptr;
+  int *keyptr;
+  uint8_t *dataptr;
 };
 
 struct BPlusNodeMeta {
@@ -50,13 +51,14 @@ struct BPlusNodeMeta {
 /// a leaf node performs exact match, data num = key num
 class BPlusTree {
 private:
+  std::string filename;
   int fd, pagenum_root;
+  int n_pages{0}, ptr_available{-1};
   int key_num;      /// a composite key consists of key_num INTs
   int internal_max; /// key size + pagenum
   int leaf_max;     /// key size + record size + record(pagenum, slotnum)
   int const internal_data_len = sizeof(int);
   int leaf_data_len;
-  BPlusForest *forest{nullptr};
 
   void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
                           uint8_t *&data) const {
@@ -88,11 +90,12 @@ private:
   void internal_insert(uint8_t *slice, const std::vector<int> key, int val);
   void internal_split(int pagenum, uint8_t *slice, std::vector<int> &key_pushup,
                       int &val_pushup);
+  int alloc_page();
+  void free_page(int page);
 
 public:
-  BPlusTree(int fd, int pagenum_root, int key_num, int record_len,
-            BPlusForest *forest);
-  BPlusTree(int fd, BPlusForest *forest, SequentialAccessor &accessor);
+  BPlusTree(const std::string &filename, int key_num, int record_len);
+  BPlusTree(SequentialAccessor &accessor);
 
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
@@ -103,43 +106,12 @@ public:
 
   std::optional<BPlusQueryResult>
   precise_match(const std::vector<int> &key) const;
-
-  BPlusQueryResult match(const std::vector<int> &key, Operator op) const;
+  BPlusQueryResult bounded_match(const std::vector<int> &key,
+                                 Operator op) const;
 
   void insert(const std::vector<int> &key, const uint8_t *record);
   bool erase(const std::vector<int> &key);
 
   void serialize(SequentialAccessor &accessor) const;
-
   void print() const;
-};
-
-/// manage multiple BPlusTree in a single file
-class BPlusForest {
-private:
-  friend class BPlusTree;
-  int fd, n_pages{0}, ptr_available{-1};
-  std::unordered_map<key_hash_t, std::shared_ptr<BPlusTree>> trees;
-  int alloc_page();
-  void free_page(int page);
-
-public:
-  /// build from scratch
-  BPlusForest(int fd) : fd(fd){};
-  /// build from file
-  BPlusForest(int fd, SequentialAccessor &accessor);
-  ~BPlusForest() { trees.clear(); }
-
-  void serialize(SequentialAccessor &accessor) const;
-
-  int get_pages_number() { return n_pages; }
-  const std::unordered_map<key_hash_t, std::shared_ptr<BPlusTree>> &
-  get_trees() {
-    return trees;
-  }
-
-  std::shared_ptr<BPlusTree> create_tree(key_hash_t hash, int key_num,
-                                         int record_len);
-  /// TODO: write this
-  void drop_tree(key_hash_t) {}
 };

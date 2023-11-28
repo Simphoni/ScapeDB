@@ -68,6 +68,10 @@ int FileMapping::get_fd(const std::string &file) {
   return fds.contains(file) ? fds[file] : -1;
 }
 
+std::string FileMapping::get_filename(int fd) {
+  return filenames.contains(fd) ? filenames[fd] : "";
+}
+
 void FileMapping::close_file(const std::string &file) {
   if (fds.contains(file)) {
     int fd = fds[file];

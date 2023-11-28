@@ -29,6 +29,7 @@ public:
   void close_temp_file(int);
   int open_file(const std::string &file);
   int get_fd(const std::string &file);
+  std::string get_filename(int fd);
   // closing a file will cause all its buffered pages to be deserted
   void close_file(const std::string &file);
   bool read_page(PageLocator pos, uint8_t *ptr);

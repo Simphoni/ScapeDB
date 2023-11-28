@@ -1,29 +1,30 @@
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
 #include <engine/defs.h>
 #include <storage/defs.h>
 
+key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields);
+
 struct IndexMeta {
-  std::vector<std::shared_ptr<Field>> keys;
+  std::vector<int> key_offset;
   bool store_full_data;
   int refcount;
+  std::shared_ptr<BPlusTree> tree;
 
-  IndexMeta() = default;
-  IndexMeta(const IndexMeta &) = default;
   IndexMeta(SequentialAccessor &s,
             const std::vector<std::shared_ptr<Field>> &fields);
   IndexMeta(const std::vector<std::shared_ptr<Field>> &keys,
-            bool store_full_data);
+            bool store_full_data, std::shared_ptr<BPlusTree> tree);
   void serialize(SequentialAccessor &s) const;
 };
 
 class IndexManager {
 private:
-  std::string filename;
-  std::shared_ptr<BPlusForest> forest;
-  std::unordered_map<key_hash_t, IndexMeta> index;
+  std::string path;
+  std::unordered_map<key_hash_t, std::shared_ptr<IndexMeta>> index;
   int record_len;
 
 public:
@@ -36,6 +37,8 @@ public:
   void add_index(const std::vector<std::shared_ptr<Field>> &fields,
                  bool store_full_data);
   void drop_index(const std::vector<std::shared_ptr<Field>> &fields);
+  BPlusQueryResult bounded_match(key_hash_t hash, const std::vector<int> &keys,
+                                 Operator op) const;
+  BPlusQueryResult bounded_match(key_hash_t hash, uint8_t *ptr,
+                                 Operator op) const;
 };
-
-key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields);

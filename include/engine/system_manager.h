@@ -88,7 +88,7 @@ class TableManager {
 private:
   friend class RecordManager;
   std::string table_name;
-  std::string meta_file, data_file, index_file;
+  std::string meta_file, data_file, index_prefix;
   std::shared_ptr<PagedBuffer> paged_buffer;
 
   std::vector<std::shared_ptr<Field>> fields;
@@ -130,6 +130,6 @@ public:
   }
   int get_record_len() const noexcept { return record_len; }
   void insert_record(const std::vector<std::any> &values);
-  void insert_record(uint8_t *ptr);
+  void check_insert_valid(uint8_t *ptr);
   // TODO: implement primary/foreign key constraints check
 };

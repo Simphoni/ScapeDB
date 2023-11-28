@@ -142,6 +142,7 @@ struct FakeField {
   std::string name;
   bool random_name{false};
   std::shared_ptr<KeyBase> key;
+  key_hash_t hash;
 
   FakeField(std::shared_ptr<Field> field);
   FakeField(SequentialAccessor &s);

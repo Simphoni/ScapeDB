@@ -11,6 +11,7 @@ class PagedBuffer;
 class FileMapping;
 class SequentialAccessor;
 
+struct BPlusQueryResult;
 struct BPlusNodeMeta;
 class BPlusTree;
 class BPlusForest;
