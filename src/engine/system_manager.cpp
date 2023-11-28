@@ -3,6 +3,7 @@
 
 #include <engine/defs.h>
 #include <engine/field.h>
+#include <engine/index.h>
 #include <engine/record.h>
 #include <engine/system_manager.h>
 #include <storage/storage.h>
@@ -26,11 +27,8 @@ GlobalManager::GlobalManager() {
   } else {
     uint32_t db_count = accessor.read<uint32_t>();
     for (size_t i = 0; i < db_count; i++) {
-      unified_id_t db_id = get_unified_id();
       std::string db_name = accessor.read_str();
-      auto db = DatabaseManager::build(db_name, true);
-      dbs.insert(std::make_pair(db_id, db));
-      name2id.insert(std::make_pair(db_name, db_id));
+      lookup[db_name] = DatabaseManager::build(db_name, true);
     }
   }
 }
@@ -39,36 +37,24 @@ GlobalManager::~GlobalManager() {
   int fd = FileMapping::get()->open_file(db_global_meta);
   SequentialAccessor accessor(fd);
   accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
-  accessor.write<uint32_t>(dbs.size());
-  for (auto &[id, db] : dbs) {
-    accessor.write_str(db->get_name());
+  accessor.write<uint32_t>(lookup.size());
+  for (const auto &it : lookup) {
+    accessor.write_str(it.first);
   }
 }
 
 void GlobalManager::create_db(const std::string &s) {
-  if (name2id.contains(s))
+  if (lookup.contains(s))
     return;
-  unified_id_t id = get_unified_id();
-  dbs.insert(std::make_pair(id, DatabaseManager::build(s, false)));
-  name2id.insert(std::make_pair(s, id));
+  lookup[s] = DatabaseManager::build(s, false);
 }
 
 void GlobalManager::drop_db(const std::string &s) {
-  if (!name2id.contains(s))
+  auto it = lookup.find(s);
+  if (it == lookup.end())
     return;
-  unified_id_t id = name2id[s];
-  auto it = dbs.find(id);
   it->second->purge();
-  dbs.erase(it->first);
-  name2id.erase(s);
-}
-
-unified_id_t GlobalManager::get_db_id(const std::string &s) const {
-  auto it = name2id.find(s);
-  if (it == name2id.end()) {
-    return 0;
-  }
-  return it->second;
+  lookup.erase(it);
 }
 
 DatabaseManager::DatabaseManager(const std::string &name, bool from_file) {
@@ -108,14 +94,6 @@ DatabaseManager::~DatabaseManager() {
   for (auto [name, tbl] : lookup) {
     accessor.write_str(tbl->get_name());
   }
-}
-
-std::shared_ptr<TableManager>
-DatabaseManager::get_table_manager(const std::string &s) const {
-  auto it = lookup.find(s);
-  if (it == lookup.end())
-    return nullptr;
-  return it->second;
 }
 
 void DatabaseManager::purge() {
@@ -173,7 +151,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     fields[i]->pers_index = i;
     fields[i]->pers_offset = record_len;
     fields[i]->table_id = table_id;
-    name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
+    lookup.insert(std::make_pair(fields[i]->field_name, fields[i]));
     record_len += fields[i]->get_size();
   }
   if (accessor.read_byte()) {
@@ -194,9 +172,8 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     }
   }
   /// Foreign key will initialize after all tables are loaded
-  record_manager =
-      std::shared_ptr<RecordManager>(new RecordManager(data_file, accessor));
-  // TODO: read index metadata
+  record_manager = std::make_shared<RecordManager>(accessor);
+  index_manager = std::make_shared<IndexManager>(accessor, fields);
 }
 
 /// construct from create_table SQL query
@@ -226,7 +203,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   }
   record_len = sizeof(bitmap_t);
   for (size_t i = 0; i < fields.size(); ++i) {
-    name2col.insert(std::make_pair(fields[i]->field_name, fields[i]));
+    lookup.insert(std::make_pair(fields[i]->field_name, fields[i]));
     fields[i]->pers_index = i;
     fields[i]->pers_offset = record_len;
     fields[i]->table_id = table_id;
@@ -241,8 +218,8 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   }
   record_manager =
       std::shared_ptr<RecordManager>(new RecordManager(data_file, record_len));
-
-  assert(record_len == record_manager->record_len);
+  index_manager =
+      std::shared_ptr<IndexManager>(new IndexManager(index_file, record_len));
 }
 
 TableManager::~TableManager() {
@@ -263,13 +240,13 @@ TableManager::~TableManager() {
   for (const auto &field : foreign_keys) {
     field->serialize(accessor);
   }
-  // TODO: write index metadata
   record_manager->serialize(accessor);
+  index_manager->serialize(accessor);
 }
 
 std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
-  auto it = name2col.find(s);
-  if (it == name2col.end()) {
+  auto it = lookup.find(s);
+  if (it == lookup.end()) {
     return nullptr;
   }
   return it->second;

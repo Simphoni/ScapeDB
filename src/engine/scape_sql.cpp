@@ -13,7 +13,7 @@
 namespace ScapeSQL {
 
 void create_db(const std::string &s) {
-  if (GlobalManager::get()->get_db_id(s) != 0) {
+  if (GlobalManager::get()->get_db_manager(s) != nullptr) {
     printf("ERROR: database %s already exists\n", s.data());
   } else {
     GlobalManager::get()->create_db(s);
@@ -21,7 +21,7 @@ void create_db(const std::string &s) {
 }
 
 void drop_db(const std::string &s) {
-  if (GlobalManager::get()->get_db_id(s) == 0) {
+  if (GlobalManager::get()->get_db_manager(s) == nullptr) {
     printf("ERROR: database %s does not exist\n", s.data());
   } else {
     GlobalManager::get()->drop_db(s);
@@ -37,13 +37,13 @@ void show_dbs() {
   std::vector<std::string> table{"DATABASES"};
   table.reserve(dbs.size() + 1);
   for (const auto &db : dbs) {
-    table.emplace_back(db.second->get_name());
+    table.emplace_back(db.first);
   }
   Logger::tabulate(table, table.size(), 1);
 }
 
 void use_db(const std::string &s) {
-  if (GlobalManager::get()->get_db_id(s) == 0) {
+  if (GlobalManager::get()->get_db_manager(s) == nullptr) {
     printf("ERROR: database %s does not exist\n", s.data());
   } else {
     ScapeFrontend::get()->set_db(s);

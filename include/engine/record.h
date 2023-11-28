@@ -73,7 +73,7 @@ private:
 public:
   /// used when creating a table
   RecordManager(const std::string &datafile_name, int record_len);
-  RecordManager(const std::string &datafile_name, SequentialAccessor &accessor);
+  RecordManager(SequentialAccessor &accessor);
 
   int get_fd() const noexcept { return fd; }
   uint8_t *get_record_ref(int pageid, int slotid);

@@ -17,8 +17,7 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
   std::string db_global_meta;
 
-  std::map<unified_id_t, std::shared_ptr<DatabaseManager>> dbs;
-  std::unordered_map<std::string, unified_id_t> name2id;
+  std::unordered_map<std::string, std::shared_ptr<DatabaseManager>> lookup;
 
   GlobalManager();
   GlobalManager(const GlobalManager &) = delete;
@@ -35,11 +34,16 @@ public:
 
   void create_db(const std::string &s);
   void drop_db(const std::string &s);
-  const std::map<unified_id_t, std::shared_ptr<DatabaseManager>> &
+  const std::unordered_map<std::string, std::shared_ptr<DatabaseManager>> &
   get_dbs() const {
-    return dbs;
+    return lookup;
   }
-  unified_id_t get_db_id(const std::string &s) const;
+  std::shared_ptr<DatabaseManager> get_db_manager(const std::string &s) const {
+    auto it = lookup.find(s);
+    if (it == lookup.end())
+      return nullptr;
+    return it->second;
+  }
 };
 
 class DatabaseManager {
@@ -48,7 +52,7 @@ private:
   std::shared_ptr<FileMapping> file_manager;
 
   std::string db_name, db_dir, db_meta;
-  std::map<std::string, std::shared_ptr<TableManager>> lookup;
+  std::unordered_map<std::string, std::shared_ptr<TableManager>> lookup;
   bool purged{false};
 
   DatabaseManager(const std::string &name, bool from_file);
@@ -62,15 +66,20 @@ public:
   }
 
   inline std::string get_name() const noexcept { return db_name; }
-  const std::map<std::string, std::shared_ptr<TableManager>> &
+  const std::unordered_map<std::string, std::shared_ptr<TableManager>> &
   get_tables() const {
     return lookup;
+  }
+  std::shared_ptr<TableManager> get_table_manager(const std::string &s) const {
+    auto it = lookup.find(s);
+    if (it == lookup.end())
+      return nullptr;
+    return it->second;
   }
 
   void create_table(const std::string &name,
                     std::vector<std::shared_ptr<Field>> &&fields);
   void drop_table(const std::string &name);
-  std::shared_ptr<TableManager> get_table_manager(const std::string &s) const;
 
   void purge();
 };
@@ -83,17 +92,17 @@ private:
   std::shared_ptr<PagedBuffer> paged_buffer;
 
   std::vector<std::shared_ptr<Field>> fields;
+  std::unordered_map<std::string, std::shared_ptr<Field>> lookup;
   /// constraints
   std::shared_ptr<FakeField> primary_key;
   std::vector<std::shared_ptr<FakeField>> foreign_keys;
 
-  std::unordered_map<std::string, std::shared_ptr<Field>> name2col;
-  bool purged{false};
-
+  int table_id;
   int record_len;
   std::shared_ptr<RecordManager> record_manager;
+  std::shared_ptr<IndexManager> index_manager;
 
-  int table_id;
+  bool purged{false};
 
 public:
   TableManager(const std::string &db_dir, const std::string &name,

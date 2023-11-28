@@ -33,12 +33,7 @@ void ScapeFrontend::set_db(const std::string &db_name) {
     return;
   }
   current_db = db_name;
-  auto database_id = global_manager->get_db_id(db_name);
-  if (database_id == 0) {
-    db_manager = nullptr;
-  } else {
-    db_manager = global_manager->get_dbs().at(database_id);
-  }
+  db_manager = global_manager->get_db_manager(db_name);
 }
 
 void ScapeFrontend::execute(const std::string &stmt) {

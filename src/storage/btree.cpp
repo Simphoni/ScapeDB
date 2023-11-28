@@ -462,7 +462,8 @@ void BPlusForest::serialize(SequentialAccessor &accessor) const {
   accessor.write<uint32_t>(n_pages);
   accessor.write<uint32_t>(ptr_available);
   accessor.write<uint32_t>(trees.size());
-  for (auto &tree : trees) {
+  for (auto &[hash, tree] : trees) {
+    accessor.write<key_hash_t>(hash);
     tree->serialize(accessor);
   }
 }
@@ -490,21 +491,21 @@ BPlusForest::BPlusForest(int fd, SequentialAccessor &accessor) : fd(fd) {
   n_pages = accessor.read<uint32_t>();
   ptr_available = accessor.read<uint32_t>();
   int n_trees = accessor.read<uint32_t>();
-  trees.resize(n_trees);
   for (int i = 0; i < n_trees; ++i) {
-    trees[i] = std::make_shared<BPlusTree>(fd, this, accessor);
+    key_hash_t hash = accessor.read<key_hash_t>();
+    trees[hash] = std::make_shared<BPlusTree>(fd, this, accessor);
   }
 }
 
-std::shared_ptr<BPlusTree> BPlusForest::create_tree(int key_num,
-                                                    int record_len) {
+std::shared_ptr<BPlusTree>
+BPlusForest::create_tree(key_hash_t hash, int key_num, int record_len) {
   int rt = n_pages++;
   uint8_t *slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, rt));
   BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
   meta->reset();
   meta->type = NodeType::LEAF;
   auto ptr = std::make_shared<BPlusTree>(fd, rt, key_num, record_len, this);
-  trees.push_back(ptr);
+  trees[hash] = ptr;
   std::vector<int> minimal = std::vector<int>(key_num, INT_MIN);
   ptr->insert(minimal, bbuf);
   return ptr;

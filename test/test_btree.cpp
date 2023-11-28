@@ -21,7 +21,7 @@ TEST(btree, RootUpdate) {
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
   auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(key_num, record_len);
+  auto btree = bforest->create_tree(0, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -50,7 +50,7 @@ TEST(btree, LeafSplit_InternalInsert) {
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
   auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(key_num, record_len);
+  auto btree = bforest->create_tree(0, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -82,7 +82,7 @@ TEST(btree, InternalSplit) {
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
   auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(key_num, record_len);
+  auto btree = bforest->create_tree(0, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {
@@ -114,7 +114,7 @@ TEST(btree, Erase) {
   Config::get_mut()->temp_file_template = "./fileXXXXXX";
   int fd = FileMapping::get()->create_temp_file();
   auto bforest = new BPlusForest(fd);
-  auto btree = bforest->create_tree(key_num, record_len);
+  auto btree = bforest->create_tree(0, key_num, record_len);
   for (int i = 0; i < n; i++) {
     key[i].resize(key_num);
     for (int j = 0; j < key_num; j++) {

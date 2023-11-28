@@ -42,6 +42,7 @@ class JoinIterator;
 
 typedef uint32_t unified_id_t;
 typedef uint16_t bitmap_t;
+typedef uint64_t key_hash_t;
 
 unified_id_t get_unified_id();
 

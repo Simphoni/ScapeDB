@@ -1,9 +1,9 @@
 #pragma once
 
-#include "storage/paged_buffer.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <engine/defs.h>
@@ -117,8 +117,11 @@ public:
 /// manage multiple BPlusTree in a single file
 class BPlusForest {
 private:
+  friend class BPlusTree;
   int fd, n_pages{0}, ptr_available{-1};
-  std::vector<std::shared_ptr<BPlusTree>> trees;
+  std::unordered_map<key_hash_t, std::shared_ptr<BPlusTree>> trees;
+  int alloc_page();
+  void free_page(int page);
 
 public:
   /// build from scratch
@@ -128,10 +131,15 @@ public:
   ~BPlusForest() { trees.clear(); }
 
   void serialize(SequentialAccessor &accessor) const;
-  int alloc_page();
-  void free_page(int page);
-  std::shared_ptr<BPlusTree> create_tree(int key_num, int record_len);
 
   int get_pages_number() { return n_pages; }
-  const std::vector<std::shared_ptr<BPlusTree>> get_trees() { return trees; }
+  const std::unordered_map<key_hash_t, std::shared_ptr<BPlusTree>> &
+  get_trees() {
+    return trees;
+  }
+
+  std::shared_ptr<BPlusTree> create_tree(key_hash_t hash, int key_num,
+                                         int record_len);
+  /// TODO: write this
+  void drop_tree(key_hash_t) {}
 };

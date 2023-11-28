@@ -38,9 +38,8 @@ RecordManager::RecordManager(const std::string &datafile_name, int record_len)
   header_len = BITMAP_START_OFFSET + headmask_size * sizeof(uint64_t);
 }
 
-RecordManager::RecordManager(const std::string &datafile_name,
-                             SequentialAccessor &accessor)
-    : filename(datafile_name) {
+RecordManager::RecordManager(SequentialAccessor &accessor) {
+  filename = accessor.read_str();
   fd = FileMapping::get()->open_file(filename);
   n_pages = accessor.read<uint32_t>();
   ptr_available = accessor.read<uint32_t>();
@@ -51,6 +50,7 @@ RecordManager::RecordManager(const std::string &datafile_name,
 }
 
 void RecordManager::serialize(SequentialAccessor &accessor) {
+  accessor.write_str(filename);
   accessor.write<uint32_t>(n_pages);
   accessor.write<uint32_t>(ptr_available);
   accessor.write<uint32_t>(record_len);
