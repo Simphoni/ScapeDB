@@ -2,6 +2,7 @@
 #include <memory>
 #include <tuple>
 
+#include <engine/field.h>
 #include <engine/query.h>
 #include <engine/scape_sql.h>
 #include <engine/system_manager.h>
@@ -266,9 +267,10 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
     if (!f.has_value()) {
       return std::any();
     }
-    fields.push_back(std::any_cast<std::shared_ptr<Field>>(std::move(f)));
-    if (fields.back()->fakefield != nullptr) {
-      n_primary += fields.back()->fakefield->type == KeyType::PRIMARY;
+    auto field = std::any_cast<std::shared_ptr<Field>>(std::move(f));
+    fields.push_back(field);
+    if (field->fakefield != nullptr) {
+      n_primary += field->fakefield->type == KeyType::PRIMARY;
     }
   }
   if (n_primary > 1) {
@@ -310,10 +312,10 @@ ScapeVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
   primary->field_names =
       std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
   if (ctx->Identifier() != nullptr) {
-    field->field_name = ctx->Identifier()->getText();
+    primary->key_name = ctx->Identifier()->getText();
   } else {
-    field->random_name = true;
-    field->field_name = "";
+    primary->random_name = true;
+    primary->key_name = "primary_" + generate_random_string();
   }
   return field;
 }
@@ -327,17 +329,17 @@ ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
   auto foreign = std::dynamic_pointer_cast<ForeignKey>(field->fakefield);
   foreign->ref_table_name = ctx->Identifier().back()->getText();
   if (ctx->Identifier().size() == 2) {
-    field->field_name = ctx->Identifier().front()->getText();
+    foreign->key_name = ctx->Identifier().front()->getText();
   } else {
-    field->random_name = true;
-    field->field_name = "";
+    foreign->random_name = true;
+    foreign->key_name = "foreign_" + generate_random_string();
   }
   if (ctx->identifiers().size() != 2) {
     has_err = true;
-    puts("ERROR: must specify both foreign key and reference key");
+    puts("ERROR: must specify both local key and reference key");
     return std::any();
   }
-  foreign->local_field_names = std::any_cast<std::vector<std::string>>(
+  foreign->field_names = std::any_cast<std::vector<std::string>>(
       ctx->identifiers(0)->accept(this));
   foreign->ref_field_names = std::any_cast<std::vector<std::string>>(
       ctx->identifiers(1)->accept(this));
@@ -561,4 +563,21 @@ std::any ScapeVisitor::visitWhere_operator_expression(
   }
   has_err = true;
   return std::any();
+}
+
+// clang-format off
+/// 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'PRIMARY' 'KEY' '(' identifiers ')'
+// clang-format on
+std::any ScapeVisitor::visitAlter_table_add_pk(
+    SQLParser::Alter_table_add_pkContext *ctx) {
+  auto pk = std::make_shared<PrimaryKey>();
+  if (ctx->Identifier().size() >= 1) {
+    pk->random_name = false;
+    pk->key_name = ctx->Identifier(0)->getText();
+  } else {
+    pk->random_name = true;
+    pk->key_name = generate_random_string();
+  }
+  pk->field_names =
+      std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
 }

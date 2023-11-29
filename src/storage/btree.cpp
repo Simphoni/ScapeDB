@@ -5,6 +5,7 @@
 #include <storage/btree.h>
 #include <storage/paged_buffer.h>
 #include <utils/config.h>
+#include <utils/misc.h>
 
 int BPlusTree::compare_key(const int *a, const int *b) const {
   for (int i = 0; i < key_num; ++i) {
@@ -411,8 +412,30 @@ BPlusTree::precise_match(const std::vector<int> &key) const {
   }
 }
 
-BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key,
+BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
                                           Operator op) const {
+  auto key = key_;
+  if (op == Operator::LT) {
+    op = LE;
+    for (int i = key_num - 1; i >= 0; i--) {
+      if (key[i] != INT_MIN) {
+        --key[i];
+        break;
+      } else {
+        key[i] = INT_MAX;
+      }
+    }
+  } else if (op == Operator::GT) {
+    op = GE;
+    for (int i = key_num - 1; i >= 0; i--) {
+      if (key[i] != INT_MAX) {
+        ++key[i];
+        break;
+      } else {
+        key[i] = INT_MIN;
+      }
+    }
+  }
   assert(op == Operator::LE || op == Operator::GE);
   int pagenum_cur = pagenum_root;
   while (true) {
@@ -423,13 +446,18 @@ BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key,
     int *data = keys + key_num * get_cap(meta->type);
     if (meta->type == NodeType::LEAF) {
       int idx = bin_search(keys, meta->size, key, op);
-      if (op == Operator::LE) {
+      if (idx < meta->size) {
         return (BPlusQueryResult){pagenum_cur, idx, keys + idx * key_num,
                                   ((uint8_t *)data) + leaf_data_len * idx};
       }
       if (idx >= meta->size) {
         pagenum_cur = meta->right_sibling;
         assert(pagenum_cur != -1);
+        slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+        keys = (int *)(slice + sizeof(BPlusNodeMeta));
+        data = keys + key_num * get_cap(meta->type);
+        idx = 0;
+        return (BPlusQueryResult){pagenum_cur, 0, keys, (uint8_t *)data};
       }
     } else {
       int idx = bin_search(keys, meta->size, key, Operator::LE);
@@ -481,6 +509,7 @@ BPlusTree::BPlusTree(SequentialAccessor &accessor) {
 
 BPlusTree::BPlusTree(const std::string &filename, int key_num, int record_len)
     : filename(filename), key_num(key_num), leaf_data_len(record_len) {
+  ensure_file(filename);
   fd = FileMapping::get()->open_file(filename);
   internal_max = (Config::PAGE_SIZE - sizeof(BPlusNodeMeta)) /
                  (sizeof(int) * (key_num + 1));

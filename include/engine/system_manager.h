@@ -7,8 +7,7 @@
 #include <vector>
 
 #include <engine/defs.h>
-#include <engine/field.h>
-#include <storage/storage.h>
+#include <storage/defs.h>
 #include <utils/config.h>
 
 class GlobalManager {
@@ -87,30 +86,32 @@ public:
 class TableManager {
 private:
   friend class RecordManager;
-  std::string table_name;
+  std::string table_name, db_name;
   std::string meta_file, data_file, index_prefix;
   std::shared_ptr<PagedBuffer> paged_buffer;
 
   std::vector<std::shared_ptr<Field>> fields;
   std::unordered_map<std::string, std::shared_ptr<Field>> lookup;
   /// constraints
-  std::shared_ptr<FakeField> primary_key;
-  std::vector<std::shared_ptr<FakeField>> foreign_keys;
+  std::shared_ptr<PrimaryKey> primary_key;
+  std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
 
   int table_id;
   int record_len;
   std::shared_ptr<RecordManager> record_manager;
-  std::shared_ptr<IndexManager> index_manager;
+  std::unordered_map<key_hash_t, std::shared_ptr<IndexMeta>> index_manager;
 
   bool purged{false};
 
 public:
   TableManager(const std::string &db_dir, const std::string &name,
                unified_id_t id);
-  TableManager(const std::string &db_dir, const std::string &name,
-               unified_id_t id, std::vector<std::shared_ptr<Field>> &&fields);
+  TableManager(const std::string &db_name, const std::string &db_dir,
+               const std::string &name, unified_id_t id,
+               std::vector<std::shared_ptr<Field>> &&fields);
 
   ~TableManager();
+  void purge();
 
   inline std::string get_name() const noexcept { return table_name; }
   const std::vector<std::shared_ptr<Field>> &get_fields() const {
@@ -118,18 +119,24 @@ public:
   }
   std::shared_ptr<Field> get_field(const std::string &s) const;
 
-  std::shared_ptr<FakeField> get_primary_key() const { return primary_key; }
-  const std::vector<std::shared_ptr<FakeField>> &get_foreign_keys() const {
-    return foreign_keys;
+  std::shared_ptr<IndexMeta> get_index(key_hash_t hash) const {
+    auto it = index_manager.find(hash);
+    return it == index_manager.end() ? nullptr : it->second;
   }
 
-  void purge();
-
+  std::shared_ptr<PrimaryKey> get_primary_key() const { return primary_key; }
+  const std::vector<std::shared_ptr<ForeignKey>> &get_foreign_keys() const {
+    return foreign_keys;
+  }
   std::shared_ptr<RecordManager> get_record_manager() const noexcept {
     return record_manager;
   }
+
   int get_record_len() const noexcept { return record_len; }
   void insert_record(const std::vector<std::any> &values);
-  void check_insert_valid(uint8_t *ptr);
-  // TODO: implement primary/foreign key constraints check
+  bool check_insert_valid(uint8_t *ptr);
+
+  void add_index(const std::vector<std::shared_ptr<Field>> &fields,
+                 bool store_full_data);
+  void add_pk(std::shared_ptr<PrimaryKey> field);
 };

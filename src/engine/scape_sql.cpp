@@ -118,10 +118,17 @@ void describe_table(const std::string &s) {
   const auto &fields = tbl->get_fields();
   std::vector<std::string> table{"Field", "Type", "Null", "Default"};
   table.reserve(fields.size() * 4 + 4);
+  std::set<unified_id_t> pk_fields;
+  if (tbl->get_primary_key() != nullptr) {
+    for (auto &str : tbl->get_primary_key()->field_names) {
+      pk_fields.insert(tbl->get_field(str)->field_id);
+    }
+  }
   for (const auto &field : fields) {
     table.push_back(field->field_name);
     table.push_back(field->type_str());
-    table.push_back(field->notnull ? "NO" : "YES");
+    table.push_back(
+        field->notnull || pk_fields.contains(field->field_id) ? "NO" : "YES");
     if (field->dtype_meta->has_default_val) {
       table.push_back(field->dtype_meta->val_str());
     } else {
@@ -133,28 +140,26 @@ void describe_table(const std::string &s) {
   if (Config::get()->batch_mode) {
     puts("");
   }
-  auto prikey = tbl->get_primary_key();
-  if (prikey != nullptr) {
-    auto key_detail = std::dynamic_pointer_cast<PrimaryKey>(prikey->key);
-    assert(key_detail != nullptr);
+  auto pk = tbl->get_primary_key();
+  if (pk != nullptr) {
+    assert(pk != nullptr);
     printf("PRIMARY KEY ");
-    if (!prikey->random_name) {
-      printf("%s", prikey->name.data());
+    if (!pk->random_name) {
+      printf("%s", pk->key_name.data());
     }
-    print_list(key_detail->field_names);
+    print_list(pk->field_names);
     puts(";");
   }
   auto foreign_keys = tbl->get_foreign_keys();
-  for (auto key : foreign_keys) {
-    auto key_detail = std::dynamic_pointer_cast<ForeignKey>(key->key);
-    assert(key_detail != nullptr);
+  for (auto fk : foreign_keys) {
+    assert(fk != nullptr);
     printf("FOREIGN KEY ");
-    if (!key->random_name) {
-      printf("%s", key->name.data());
+    if (!fk->random_name) {
+      printf("%s", fk->key_name.data());
     }
-    print_list(key_detail->local_field_names);
-    printf(" REFERENCES %s", key_detail->ref_table_name.data());
-    print_list(key_detail->ref_field_names);
+    print_list(fk->field_names);
+    printf(" REFERENCES %s", fk->ref_table_name.data());
+    print_list(fk->ref_field_names);
     puts(";");
   }
 }
@@ -305,6 +310,22 @@ void insert_from_file(const std::string &file_path,
     record_manager->insert_record(ptr);
   }
   fastIO::end_read();
+}
+
+void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key) {
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected.");
+    has_err = true;
+    return;
+  }
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s doesn't exist.", table_name.data());
+    has_err = true;
+    return;
+  }
+  table->add_pk(key);
 }
 
 } // namespace ScapeSQL

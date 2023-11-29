@@ -13,6 +13,8 @@ class TableManager;
 class RecordManager;
 
 /// index.h
+struct IndexMeta;
+struct InsertCollection;
 class IndexManager;
 
 /// field.h

@@ -87,6 +87,11 @@ struct VarcharType : public DataTypeBase {
 
 struct KeyBase {
   KeyType type;
+  bool random_name{false};
+  std::string key_name;
+  std::vector<std::string> field_names;
+  std::vector<std::shared_ptr<Field>> fields;
+  std::shared_ptr<IndexMeta> index;
 
   virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
@@ -95,8 +100,6 @@ struct KeyBase {
 };
 
 struct PrimaryKey : public KeyBase {
-  std::vector<std::string> field_names;
-  std::vector<std::shared_ptr<Field>> fields;
 
   PrimaryKey() { type = PRIMARY; }
   void serialize(SequentialAccessor &s) const override;
@@ -106,15 +109,13 @@ struct PrimaryKey : public KeyBase {
 
 struct ForeignKey : public KeyBase {
   std::string ref_table_name;
-  std::vector<std::string> local_field_names;
   std::vector<std::string> ref_field_names;
-  std::vector<std::shared_ptr<Field>> local_fields;
   std::vector<std::shared_ptr<Field>> ref_fields;
 
   ForeignKey() { type = FOREIGN; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
-  void build(const TableManager *table, const DatabaseManager *db);
+  void build(const TableManager *table, std::shared_ptr<const TableManager> db);
 };
 
 struct Field {
@@ -122,7 +123,7 @@ struct Field {
   std::shared_ptr<DataTypeBase> dtype_meta;
   unified_id_t field_id, table_id;
   int pers_index, pers_offset;
-  bool notnull{false}, random_name{false};
+  bool notnull{false};
   std::shared_ptr<KeyBase> fakefield;
 
   // we provide only basic constructors, user can freely modify other members
@@ -136,16 +137,4 @@ struct Field {
   std::string type_str() const { return dtype_meta->type_str(); }
   /// NOTE: returns mxlen + 1 for VARCHAR
   inline int get_size() const noexcept { return dtype_meta->get_size(); }
-};
-
-struct FakeField {
-  std::string name;
-  bool random_name{false};
-  std::shared_ptr<KeyBase> key;
-  key_hash_t hash;
-
-  FakeField(std::shared_ptr<Field> field);
-  FakeField(SequentialAccessor &s);
-
-  void serialize(SequentialAccessor &s) const;
 };

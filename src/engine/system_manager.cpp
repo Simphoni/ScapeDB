@@ -111,8 +111,8 @@ void DatabaseManager::create_table(
   if (lookup.contains(name)) {
     return;
   }
-  auto tbl = std::shared_ptr<TableManager>(
-      new TableManager(db_dir, name, get_unified_id(), std::move(fields)));
+  auto tbl = std::shared_ptr<TableManager>(new TableManager(
+      db_name, db_dir, name, get_unified_id(), std::move(fields)));
   if (has_err)
     return;
   lookup[name] = tbl;
@@ -142,6 +142,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     printf("ERROR: table metadata file %s is invalid.", meta_file.data());
     std::exit(0);
   }
+  db_name = accessor.read_str();
   int field_count = accessor.read<uint32_t>();
   fields.resize(field_count);
   for (int i = 0; i < field_count; i++) {
@@ -153,49 +154,49 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     lookup.insert(std::make_pair(fields[i]->field_name, fields[i]));
     record_len += fields[i]->get_size();
   }
-  if (accessor.read_byte()) {
-    primary_key = std::make_shared<FakeField>(accessor);
-  }
-  int foreign_key_count = accessor.read<uint32_t>();
-  foreign_keys.resize(foreign_key_count);
-  for (int i = 0; i < foreign_key_count; i++) {
-    foreign_keys[i] = std::make_shared<FakeField>(accessor);
-  }
-  if (primary_key != nullptr) {
-    auto prikey = std::dynamic_pointer_cast<PrimaryKey>(primary_key->key);
-    if (prikey != nullptr) {
-      prikey->build(this);
-    } else {
-      puts("ERROR: metadata is invalid!");
-      std::exit(0);
-    }
-  }
-  /// Foreign key will initialize after all tables are loaded
   record_manager = std::make_shared<RecordManager>(accessor);
-  index_manager = std::make_shared<IndexManager>(accessor, fields);
+  auto nindex = accessor.read<uint32_t>();
+  for (size_t i = 0; i < nindex; i++) {
+    auto hash = accessor.read<key_hash_t>();
+    index_manager[hash] = std::make_shared<IndexMeta>(accessor);
+  }
+  if (accessor.read_byte()) {
+    primary_key = std::make_shared<PrimaryKey>();
+    primary_key->deserialize(accessor);
+    primary_key->build(this);
+    primary_key->index = get_index(keysHash(primary_key->fields));
+  }
+  int fkcount = accessor.read<uint32_t>();
+  foreign_keys.resize(fkcount);
+  for (int i = 0; i < fkcount; i++) {
+    foreign_keys[i] = std::make_shared<ForeignKey>();
+    foreign_keys[i]->deserialize(accessor);
+  }
 }
 
 /// construct from create_table SQL query
-TableManager::TableManager(const std::string &db_dir, const std::string &name,
+TableManager::TableManager(const std::string &db_name,
+                           const std::string &db_dir, const std::string &name,
                            unified_id_t id,
                            std::vector<std::shared_ptr<Field>> &&fields_)
-    : table_name(name), table_id(id) {
+    : table_name(name), db_name(db_name), table_id(id) {
   paged_buffer = PagedBuffer::get();
   meta_file = fs::path(db_dir) / (name + ".meta");
   data_file = fs::path(db_dir) / (name + ".dat");
-  index_prefix = fs::path(db_dir) / (name + ".idx");
+  index_prefix = fs::path(db_dir) / (name + ".idx.");
   ensure_file(meta_file);
   ensure_file(data_file);
+  std::shared_ptr<PrimaryKey> primary_key_tmp;
 
   for (auto it : std::move(fields_)) {
     if (it->fakefield == nullptr) {
       fields.push_back(it);
     } else {
-      auto fakef = std::shared_ptr<FakeField>(new FakeField(it));
       if (it->fakefield->type == KeyType::PRIMARY) {
-        primary_key = fakef;
+        primary_key_tmp = std::dynamic_pointer_cast<PrimaryKey>(it->fakefield);
       } else if (it->fakefield->type == KeyType::FOREIGN) {
-        foreign_keys.push_back(fakef);
+        foreign_keys.push_back(
+            std::dynamic_pointer_cast<ForeignKey>(it->fakefield));
       }
     }
   }
@@ -207,17 +208,24 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     fields[i]->table_id = table_id;
     record_len += fields[i]->get_size();
   }
-  if (primary_key != nullptr) {
-    auto prikey = std::dynamic_pointer_cast<PrimaryKey>(primary_key->key);
-    prikey->build(this);
-    for (auto field : prikey->fields) {
-      field->notnull = true;
-    }
-  }
   record_manager =
       std::shared_ptr<RecordManager>(new RecordManager(data_file, record_len));
-  index_manager =
-      std::shared_ptr<IndexManager>(new IndexManager(index_prefix, record_len));
+  if (primary_key_tmp != nullptr) {
+    add_pk(primary_key_tmp);
+  }
+  auto db = GlobalManager::get()->get_db_manager(db_name);
+  for (auto fk : foreign_keys) {
+    const std::string &ref_table_name = fk->ref_table_name;
+    auto ref_table = db->get_table_manager(ref_table_name);
+    if (ref_table == nullptr) {
+      printf("ERROR: ref table %s not found\n", ref_table_name.data());
+      has_err = true;
+      return;
+    }
+    fk->build(this, ref_table);
+    fk->index =
+        ref_table->get_index(keysHash(fk->ref_fields))->remap(fk->fields);
+  }
 }
 
 TableManager::~TableManager() {
@@ -226,9 +234,16 @@ TableManager::~TableManager() {
   }
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
+  accessor.write_str(db_name);
   accessor.write<uint32_t>(fields.size());
   for (const auto &field : fields) {
     field->serialize(accessor);
+  }
+  record_manager->serialize(accessor);
+  accessor.write<uint32_t>(index_manager.size());
+  for (const auto &[hash, index] : index_manager) {
+    accessor.write<key_hash_t>(hash);
+    index->serialize(accessor);
   }
   accessor.write_byte(primary_key != nullptr);
   if (primary_key != nullptr) {
@@ -238,8 +253,6 @@ TableManager::~TableManager() {
   for (const auto &field : foreign_keys) {
     field->serialize(accessor);
   }
-  record_manager->serialize(accessor);
-  index_manager->serialize(accessor);
 }
 
 std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
@@ -274,11 +287,73 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
     }
   }
   *(bitmap_t *)ptr = bitmap;
-  record_manager->insert_record(ptr);
+  if (check_insert_valid(ptr)) {
+    auto pos = record_manager->insert_record(ptr);
+    for (auto [_, index] : index_manager) {
+      index->insert_record(InsertCollection(pos.first, pos.second, ptr));
+    }
+  }
 }
 
-void TableManager::check_insert_valid(uint8_t *ptr) {
+bool TableManager::check_insert_valid(uint8_t *ptr) {
   if (primary_key != nullptr) {
-    // auto ret = primary_key->key->bounded_match(ptr);
+    auto index = primary_key->index;
+    auto data = index->extractKeys(InsertCollection(INT_MAX, INT_MAX, ptr));
+    auto ret = index->tree->bounded_match(data, Operator::LE);
+    int key_num = primary_key->fields.size();
+    bool match = true;
+    for (int i = 0; i < key_num; ++i) {
+      if (ret.keyptr[i] != data[i]) {
+        match = false;
+        break;
+      }
+    }
+    int trailing = ret.keyptr[key_num + 1];
+    if (match && trailing != INT_MAX && trailing != INT_MIN) {
+      printf("!ERROR\nduplicate key found.\n");
+      has_err = true;
+      return false;
+    }
+  }
+  for (auto fk : foreign_keys) {
+    /// TODO: check fk constraint
+  }
+  return true;
+}
+
+void TableManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
+                             bool store_full_data) {
+  auto hash = keysHash(fields);
+  auto it = index_manager.find(hash);
+  if (it == index_manager.end()) {
+    std::string filename = index_prefix + std::to_string(hash);
+    auto tree = std::shared_ptr<BPlusTree>(new BPlusTree(
+        filename, fields.size() + 2, store_full_data ? record_len + 4 : 4));
+    index_manager[hash] = std::make_shared<IndexMeta>(fields, false, tree);
+  } else {
+    it->second->refcount++;
+  }
+}
+
+void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
+  if (primary_key == nullptr) {
+    pk->build(this);
+    add_index(pk->fields, true);
+    pk->index = get_index(keysHash(pk->fields));
+    primary_key = pk;
+  } else {
+    bool ok = true;
+    if (primary_key->key_name != pk->key_name) {
+      ok = false;
+    }
+    if (primary_key->field_names.size() != pk->field_names.size()) {
+      ok = false;
+    }
+    for (int i = 0; i < (int)primary_key->field_names.size() && ok; ++i) {
+      ok = ok && (primary_key->field_names[i] == pk->field_names[i]);
+    }
+    if (!ok) {
+      printf("!ERROR\ntrying to create multiple primary keys.");
+    }
   }
 }

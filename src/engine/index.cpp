@@ -1,22 +1,20 @@
 #include <engine/field.h>
 #include <engine/index.h>
-#include <storage/btree.h>
 #include <storage/storage.h>
 
 key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields) {
   key_hash_t ret = 0;
   for (auto &it : fields) {
-    ret = ret << 4 | it->pers_index;
+    ret = (ret << 4) + (it->pers_index + 1);
   }
   return ret;
 }
 
-IndexMeta::IndexMeta(SequentialAccessor &s,
-                     const std::vector<std::shared_ptr<Field>> &fields) {
-  auto n = s.read<uint32_t>();
+IndexMeta::IndexMeta(SequentialAccessor &s) {
+  int n = s.read<uint32_t>();
   key_offset.resize(n);
-  for (size_t i = 0; i < n; i++) {
-    key_offset[i] = fields[s.read<uint32_t>()]->pers_offset;
+  for (int i = 0; i < n; i++) {
+    key_offset[i] = s.read<uint16_t>();
   }
   store_full_data = s.read_byte();
   refcount = s.read<uint32_t>();
@@ -31,49 +29,36 @@ IndexMeta::IndexMeta(const std::vector<std::shared_ptr<Field>> &keys,
   }
 }
 
+std::shared_ptr<IndexMeta>
+IndexMeta::remap(const std::vector<std::shared_ptr<Field>> &keys_) const {
+  return std::shared_ptr<IndexMeta>(
+      new IndexMeta(keys_, store_full_data, tree));
+}
+
 void IndexMeta::serialize(SequentialAccessor &s) const {
   s.write<uint32_t>(key_offset.size());
   for (auto &it : key_offset) {
-    s.write<uint32_t>(it);
+    s.write<uint16_t>(it);
   }
   s.write_byte(store_full_data);
   s.write<uint32_t>(refcount);
   tree->serialize(s);
 }
 
-IndexManager::IndexManager(const std::string &path, int record_len)
-    : path(path), record_len(record_len) {}
-
-IndexManager::IndexManager(SequentialAccessor &s,
-                           const std::vector<std::shared_ptr<Field>> &fields) {
-  path = s.read_str();
-  auto nindex = s.read<uint32_t>();
-  for (size_t i = 0; i < nindex; i++) {
-    auto hash = s.read<key_hash_t>();
-    index[hash] = std::make_shared<IndexMeta>(s, fields);
-  }
-  record_len = s.read<uint32_t>();
+BPlusQueryResult IndexMeta::bounded_match(Operator op, InsertCollection data) {
+  return tree->bounded_match(extractKeys(data), op);
 }
 
-void IndexManager::serialize(SequentialAccessor &s) const {
-  s.write_str(path);
-  s.write<uint32_t>(index.size());
-  for (auto &[hash, ref] : index) {
-    s.write<key_hash_t>(hash);
-    ref->serialize(s);
-  }
-  s.write<uint32_t>(record_len);
-}
-
+/*
 void IndexManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
                              bool store_full_data) {
   auto hash = keysHash(fields);
-  auto it = index.find(hash);
-  if (it == index.end()) {
+  auto it = lookup.find(hash);
+  if (it == lookup.end()) {
     std::string filename = path + std::to_string(hash);
     auto tree = std::shared_ptr<BPlusTree>(
         new BPlusTree(filename, fields.size(), record_len));
-    index[hash] = std::make_shared<IndexMeta>(fields, false, tree);
+    lookup[hash] = std::make_shared<IndexMeta>(fields, false, tree);
   } else {
     it->second->refcount++;
   }
@@ -82,32 +67,27 @@ void IndexManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
 void IndexManager::drop_index(
     const std::vector<std::shared_ptr<Field>> &fields) {
   auto hash = keysHash(fields);
-  auto it = index.find(hash);
-  if (it == index.end()) {
+  auto it = lookup.find(hash);
+  if (it == lookup.end()) {
     return;
   }
   it->second->refcount--;
   if (it->second->refcount == 0) {
-    index.erase(it);
+    lookup.erase(it);
   }
 }
+*/
 
-BPlusQueryResult IndexManager::bounded_match(key_hash_t hash, uint8_t *ptr,
-                                             Operator op) const {
-  auto it = index.find(hash);
-  assert(it != index.end());
-  const auto &offset = it->second->key_offset;
-  std::vector<int> keys(offset.size());
-  for (size_t i = 0; i < offset.size(); i++) {
-    keys[i] = *(int *)(ptr + offset[i]);
-  }
-  return bounded_match(hash, keys, op);
+std::vector<int> IndexMeta::extractKeys(const InsertCollection &data) {
+  int num_keys = key_offset.size();
+  std::vector<int> key(num_keys + 2);
+  for (int i = 0; i < num_keys; ++i)
+    key[i] = *(int *)(data.ptr + key_offset[i]);
+  key[num_keys] = data.pn;
+  key[num_keys + 1] = data.sn;
+  return key;
 }
 
-BPlusQueryResult IndexManager::bounded_match(key_hash_t hash,
-                                             const std::vector<int> &keys,
-                                             Operator op) const {
-  auto it = index.find(hash);
-  assert(it != index.end());
-  return it->second->tree->bounded_match(keys, op);
+void IndexMeta::insert_record(InsertCollection data) {
+  tree->insert(extractKeys(data), data.ptr);
 }

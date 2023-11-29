@@ -4,6 +4,7 @@
 
 #include <engine/defs.h>
 #include <engine/field.h>
+#include <engine/index.h>
 #include <engine/system_manager.h>
 #include <storage/storage.h>
 
@@ -203,7 +204,8 @@ std::shared_ptr<KeyBase> KeyBase::build(KeyType type) {
 }
 
 void PrimaryKey::serialize(SequentialAccessor &s) const {
-  s.write_byte(PRIMARY);
+  s.write_byte(random_name);
+  s.write_str(key_name);
   s.write<uint32_t>(field_names.size());
   for (auto &str : field_names) {
     s.write_str(str);
@@ -211,6 +213,8 @@ void PrimaryKey::serialize(SequentialAccessor &s) const {
 }
 
 void PrimaryKey::deserialize(SequentialAccessor &s) {
+  random_name = s.read_byte();
+  key_name = s.read_str();
   uint32_t sz = s.read<uint32_t>();
   for (uint32_t i = 0; i < sz; ++i) {
     field_names.push_back(s.read_str());
@@ -230,9 +234,10 @@ void PrimaryKey::build(const TableManager *table) {
 }
 
 void ForeignKey::serialize(SequentialAccessor &s) const {
-  s.write_byte(FOREIGN);
-  s.write<uint32_t>(local_field_names.size());
-  for (auto &str : local_field_names) {
+  s.write_byte(random_name);
+  s.write_str(key_name);
+  s.write<uint32_t>(field_names.size());
+  for (auto &str : field_names) {
     s.write_str(str);
   }
   s.write_str(ref_table_name);
@@ -243,9 +248,11 @@ void ForeignKey::serialize(SequentialAccessor &s) const {
 }
 
 void ForeignKey::deserialize(SequentialAccessor &s) {
+  random_name = s.read_byte();
+  key_name = s.read_str();
   uint32_t sz = s.read<uint32_t>();
   for (uint32_t i = 0; i < sz; ++i) {
-    local_field_names.push_back(s.read_str());
+    field_names.push_back(s.read_str());
   }
   ref_table_name = s.read_str();
   sz = s.read<uint32_t>();
@@ -254,21 +261,16 @@ void ForeignKey::deserialize(SequentialAccessor &s) {
   }
 }
 
-void ForeignKey::build(const TableManager *table, const DatabaseManager *db) {
-  for (auto &str : local_field_names) {
+void ForeignKey::build(const TableManager *table,
+                       std::shared_ptr<const TableManager> ref_table) {
+  for (auto &str : field_names) {
     auto field = table->get_field(str);
     if (field == nullptr) {
       printf("ERROR: field %s not found\n", str.data());
       has_err = true;
       return;
     }
-    local_fields.push_back(field);
-  }
-  auto ref_table = db->get_table_manager(ref_table_name);
-  if (ref_table == nullptr) {
-    printf("ERROR: ref table %s not found\n", ref_table_name.data());
-    has_err = true;
-    return;
+    fields.push_back(field);
   }
   for (auto &str : ref_field_names) {
     auto field = ref_table->get_field(str);
@@ -287,33 +289,12 @@ void ForeignKey::build(const TableManager *table, const DatabaseManager *db) {
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
   s.write_byte(notnull);
-  s.write_byte(random_name);
   dtype_meta->serialize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
   notnull = s.read_byte();
-  random_name = s.read_byte();
   dtype_meta = DataTypeBase::build(DataType(s.read_byte()));
   dtype_meta->deserialize(s);
-}
-
-FakeField::FakeField(std::shared_ptr<Field> field)
-    : random_name(field->random_name), key(field->fakefield) {
-  this->name =
-      random_name ? "fake_" + generate_random_string() : field->field_name;
-}
-
-FakeField::FakeField(SequentialAccessor &s) {
-  name = s.read_str();
-  random_name = s.read_byte();
-  key = KeyBase::build(KeyType(s.read_byte()));
-  key->deserialize(s);
-}
-
-void FakeField::serialize(SequentialAccessor &s) const {
-  s.write_str(name);
-  s.write_byte(random_name);
-  key->serialize(s);
 }

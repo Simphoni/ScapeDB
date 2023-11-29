@@ -84,4 +84,7 @@ public:
 
   std::any visitWhere_operator_expression(
       SQLParser::Where_operator_expressionContext *ctx) override;
+
+  std::any
+  visitAlter_table_add_pk(SQLParser::Alter_table_add_pkContext *ctx) override;
 };

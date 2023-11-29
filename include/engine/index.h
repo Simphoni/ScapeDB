@@ -8,37 +8,27 @@
 
 key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields);
 
+struct InsertCollection {
+  int pn, sn;
+  uint8_t *ptr;
+  InsertCollection(int pn, int sn, uint8_t *ptr) : pn(pn), sn(sn), ptr(ptr) {}
+};
+
 struct IndexMeta {
   std::vector<int> key_offset;
   bool store_full_data;
   int refcount;
   std::shared_ptr<BPlusTree> tree;
 
-  IndexMeta(SequentialAccessor &s,
-            const std::vector<std::shared_ptr<Field>> &fields);
+  IndexMeta(SequentialAccessor &s);
   IndexMeta(const std::vector<std::shared_ptr<Field>> &keys,
             bool store_full_data, std::shared_ptr<BPlusTree> tree);
-  void serialize(SequentialAccessor &s) const;
-};
 
-class IndexManager {
-private:
-  std::string path;
-  std::unordered_map<key_hash_t, std::shared_ptr<IndexMeta>> index;
-  int record_len;
-
-public:
-  IndexManager(const std::string &filename, int record_len);
-  IndexManager(SequentialAccessor &s,
-               const std::vector<std::shared_ptr<Field>> &fields);
-
+  std::shared_ptr<IndexMeta>
+  remap(const std::vector<std::shared_ptr<Field>> &keys) const;
   void serialize(SequentialAccessor &s) const;
 
-  void add_index(const std::vector<std::shared_ptr<Field>> &fields,
-                 bool store_full_data);
-  void drop_index(const std::vector<std::shared_ptr<Field>> &fields);
-  BPlusQueryResult bounded_match(key_hash_t hash, const std::vector<int> &keys,
-                                 Operator op) const;
-  BPlusQueryResult bounded_match(key_hash_t hash, uint8_t *ptr,
-                                 Operator op) const;
+  std::vector<int> extractKeys(const InsertCollection &data);
+  void insert_record(InsertCollection data);
+  BPlusQueryResult bounded_match(Operator op, InsertCollection data);
 };
