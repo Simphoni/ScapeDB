@@ -296,6 +296,16 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
   }
 }
 
+void TableManager::insert_record(uint8_t *ptr, bool enable_checking) {
+  if (enable_checking && !check_insert_valid(ptr)) {
+    return;
+  }
+  auto pos = record_manager->insert_record(ptr);
+  for (auto [_, index] : index_manager) {
+    index->insert_record(InsertCollection(pos.first, pos.second, ptr));
+  }
+}
+
 bool TableManager::check_insert_valid(uint8_t *ptr) {
   if (primary_key != nullptr) {
     auto index = primary_key->index;

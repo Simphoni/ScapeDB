@@ -76,6 +76,5 @@ int main(int argc, char **argv) {
         std::cout << std::string(_prompt.size(), ' ') + "> ";
     }
   }
-  manual_cleanup();
   return 0;
 }

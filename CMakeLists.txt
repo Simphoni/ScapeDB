@@ -4,8 +4,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_LAUNCHER ccache)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O2 -Wall -Werror -fno-strict-aliasing")
+set(CMAKE_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} -g -O2 -Wall -Werror -fno-strict-aliasing")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+set(CCACHE_EXECUTABLE "/usr/local/bin/ccache")
+if(EXISTS ${CCACHE_EXECUTABLE})
+  message(STATUS "Using ccache: ${CCACHE_EXECUTABLE}")
+  set(CMAKE_C_LAUNCHER ${CCACHE_EXECUTABLE})
+  set(CMAKE_CXX_LAUNCHER ${CCACHE_EXECUTABLE})
+endif()
 
 find_package(antlr4-runtime REQUIRED)
 

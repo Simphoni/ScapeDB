@@ -8,7 +8,10 @@ std::shared_ptr<PagedBuffer> PagedBuffer::instance = nullptr;
 
 PagedBuffer::PagedBuffer(int pool_size, int pg_size) {
   pages.resize(pool_size);
-  head_ptr = (uint8_t *)std::aligned_alloc(pg_size, pool_size * pg_size);
+  head_ptr = (uint8_t *)aligned_alloc(4096, pool_size * pg_size);
+  if (head_ptr == nullptr) {
+    perror("alloc failure");
+  }
   assert(head_ptr != nullptr);
   for (int i = 0; i < pool_size; i++) {
     pages[i] = PageMeta(i - 1, i + 1, head_ptr + i * pg_size,
@@ -27,7 +30,7 @@ PagedBuffer::~PagedBuffer() {
     if (pages[i].dirty && pages[i].pos.first != -1)
       base->write_page(pages[i].pos, pages[i].slice);
   }
-  std::free(head_ptr);
+  free(head_ptr);
 }
 
 void PagedBuffer::list_remove(int id) {

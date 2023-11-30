@@ -228,7 +228,6 @@ void insert_from_file(const std::string &file_path,
     printf("ERROR: table %s does not exist\n", table_name.data());
     return;
   }
-  auto record_manager = table->get_record_manager();
   const std::vector<std::shared_ptr<Field>> fields = table->get_fields();
   int column_num = fields.size();
   std::vector<int> offsets;
@@ -300,7 +299,7 @@ void insert_from_file(const std::string &file_path,
                sizeof(char) * (fields[i]->dtype_meta->get_size() - myit));
       }
     }
-    record_manager->insert_record(ptr);
+    table->insert_record(ptr, false);
   }
   fastIO::end_read();
 }
