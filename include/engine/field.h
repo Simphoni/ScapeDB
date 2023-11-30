@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <engine/defs.h>
+#include <engine/index.h>
 #include <storage/defs.h>
 #include <utils/misc.h>
 
@@ -95,6 +96,7 @@ struct KeyBase {
 
   virtual void serialize(SequentialAccessor &s) const = 0;
   virtual void deserialize(SequentialAccessor &s) = 0;
+  inline key_hash_t local_hash() { return keysHash(fields); }
 
   static std::shared_ptr<KeyBase> build(KeyType type);
 };
@@ -117,6 +119,7 @@ struct ForeignKey : public KeyBase {
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
   void build(const TableManager *table, std::shared_ptr<const TableManager> db);
+  inline key_hash_t ref_hash() { return keysHash(ref_fields); }
 };
 
 struct Field {

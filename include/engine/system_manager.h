@@ -109,8 +109,8 @@ public:
   TableManager(const std::string &db_name, const std::string &db_dir,
                const std::string &name, unified_id_t id,
                std::vector<std::shared_ptr<Field>> &&fields);
-
   ~TableManager();
+  void build_fk();
   void purge();
 
   inline std::string get_name() const noexcept { return table_name; }

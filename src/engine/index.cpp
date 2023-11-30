@@ -49,35 +49,6 @@ BPlusQueryResult IndexMeta::bounded_match(Operator op, InsertCollection data) {
   return tree->bounded_match(extractKeys(data), op);
 }
 
-/*
-void IndexManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
-                             bool store_full_data) {
-  auto hash = keysHash(fields);
-  auto it = lookup.find(hash);
-  if (it == lookup.end()) {
-    std::string filename = path + std::to_string(hash);
-    auto tree = std::shared_ptr<BPlusTree>(
-        new BPlusTree(filename, fields.size(), record_len));
-    lookup[hash] = std::make_shared<IndexMeta>(fields, false, tree);
-  } else {
-    it->second->refcount++;
-  }
-}
-
-void IndexManager::drop_index(
-    const std::vector<std::shared_ptr<Field>> &fields) {
-  auto hash = keysHash(fields);
-  auto it = lookup.find(hash);
-  if (it == lookup.end()) {
-    return;
-  }
-  it->second->refcount--;
-  if (it->second->refcount == 0) {
-    lookup.erase(it);
-  }
-}
-*/
-
 std::vector<int> IndexMeta::extractKeys(const InsertCollection &data) {
   int num_keys = key_offset.size();
   std::vector<int> key(num_keys + 2);

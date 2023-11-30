@@ -72,14 +72,17 @@ DatabaseManager::DatabaseManager(const std::string &name, bool from_file) {
       accessor.reset(0);
       accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
       accessor.write<uint32_t>(0);
-    } else {
-      int table_count = accessor.read<uint32_t>();
-      for (int i = 0; i < table_count; i++) {
-        std::string table_name = accessor.read_str();
-        auto tbl = std::shared_ptr<TableManager>(
-            new TableManager(db_dir, table_name, get_unified_id()));
-        lookup[table_name] = tbl;
-      }
+      return;
+    }
+    int table_count = accessor.read<uint32_t>();
+    for (int i = 0; i < table_count; i++) {
+      std::string table_name = accessor.read_str();
+      auto tbl = std::shared_ptr<TableManager>(
+          new TableManager(db_dir, table_name, get_unified_id()));
+      lookup[table_name] = tbl;
+    }
+    for (auto &[_, tbl] : lookup) {
+      tbl->build_fk();
     }
   }
 }
@@ -165,7 +168,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
     primary_key = std::make_shared<PrimaryKey>();
     primary_key->deserialize(accessor);
     primary_key->build(this);
-    primary_key->index = get_index(keysHash(primary_key->fields));
+    primary_key->index = get_index(primary_key->local_hash());
   }
   int fkcount = accessor.read<uint32_t>();
   foreign_keys.resize(fkcount);
@@ -224,8 +227,12 @@ TableManager::TableManager(const std::string &db_name,
       return;
     }
     fk->build(this, ref_table);
-    fk->index =
-        ref_table->get_index(keysHash(fk->ref_fields))->remap(fk->fields);
+    if (fk->ref_hash() != ref_table->get_primary_key()->local_hash()) {
+      printf("!ERROR: fk not referencing primary key.\n");
+      has_err = true;
+      return;
+    }
+    fk->index = ref_table->get_index(fk->ref_hash())->remap(fk->fields);
   }
 }
 
@@ -253,6 +260,17 @@ TableManager::~TableManager() {
   accessor.write<uint32_t>(foreign_keys.size());
   for (const auto &field : foreign_keys) {
     field->serialize(accessor);
+  }
+}
+
+void TableManager::build_fk() {
+  auto db = GlobalManager::get()->get_db_manager(db_name);
+  for (auto fk : foreign_keys) {
+    const std::string &ref_table_name = fk->ref_table_name;
+    auto ref_table = db->get_table_manager(ref_table_name);
+    assert(ref_table != nullptr);
+    fk->build(this, ref_table);
+    fk->index = ref_table->get_index(fk->ref_hash())->remap(fk->fields);
   }
 }
 
@@ -369,7 +387,7 @@ void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
   if (primary_key == nullptr) {
     pk->build(this);
     add_index(pk->fields, true, true);
-    pk->index = get_index(keysHash(pk->fields));
+    pk->index = get_index(pk->local_hash());
     if (pk->index != nullptr) {
       primary_key = pk;
       for (auto field : pk->fields) {
@@ -399,6 +417,6 @@ void TableManager::drop_pk() {
     has_err = true;
     return;
   }
-  drop_index(keysHash(primary_key->fields));
+  drop_index(primary_key->local_hash());
   primary_key = nullptr;
 }

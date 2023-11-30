@@ -192,6 +192,8 @@ void VarcharType::deserialize(SequentialAccessor &s) {
   }
 }
 
+/// Key classes
+
 std::shared_ptr<KeyBase> KeyBase::build(KeyType type) {
   switch (type) {
   case KeyType::PRIMARY:

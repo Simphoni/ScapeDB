@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
   parser.add_argument("-t", "--table")
       .help("specify <table: string> to operate on");
   parser.add_argument("-f", "--filepath")
-      .help("specify <path: string> to the file containing import commands");
+      .help("specify <path: string> to the file containing data in csv format");
   parser.add_argument("--init")
       .help("purge original database under default path")
       .implicit_value(true);

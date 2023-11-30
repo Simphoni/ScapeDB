@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} -g -O2 -Wall -Werror -fno-strict-aliasing")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-set(CCACHE_EXECUTABLE "/usr/local/bin/ccache")
+set(CCACHE_EXECUTABLE "/usr/bin/ccache")
 if(EXISTS ${CCACHE_EXECUTABLE})
   message(STATUS "Using ccache: ${CCACHE_EXECUTABLE}")
   set(CMAKE_C_LAUNCHER ${CCACHE_EXECUTABLE})
