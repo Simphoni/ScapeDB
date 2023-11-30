@@ -4,6 +4,7 @@
 #include <engine/defs.h>
 #include <engine/field.h>
 #include <engine/index.h>
+#include <engine/iterator.h>
 #include <engine/record.h>
 #include <engine/system_manager.h>
 #include <storage/storage.h>
@@ -139,7 +140,7 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-    printf("ERROR: table metadata file %s is invalid.", meta_file.data());
+    printf("ERROR: table metadata file %s is invalid.\n", meta_file.data());
     std::exit(0);
   }
   db_name = accessor.read_str();
@@ -300,16 +301,7 @@ bool TableManager::check_insert_valid(uint8_t *ptr) {
     auto index = primary_key->index;
     auto data = index->extractKeys(InsertCollection(INT_MAX, INT_MAX, ptr));
     auto ret = index->tree->bounded_match(data, Operator::LE);
-    int key_num = primary_key->fields.size();
-    bool match = true;
-    for (int i = 0; i < key_num; ++i) {
-      if (ret.keyptr[i] != data[i]) {
-        match = false;
-        break;
-      }
-    }
-    int trailing = ret.keyptr[key_num + 1];
-    if (match && trailing != INT_MAX && trailing != INT_MIN) {
+    if (index->approx_eq(ret.keyptr, data.data())) {
       printf("!ERROR\nduplicate key found.\n");
       has_err = true;
       return false;
@@ -322,25 +314,58 @@ bool TableManager::check_insert_valid(uint8_t *ptr) {
 }
 
 void TableManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
-                             bool store_full_data) {
+                             bool store_full_data, bool enable_unique_check) {
   auto hash = keysHash(fields);
   auto it = index_manager.find(hash);
-  if (it == index_manager.end()) {
-    std::string filename = index_prefix + std::to_string(hash);
-    auto tree = std::shared_ptr<BPlusTree>(new BPlusTree(
-        filename, fields.size() + 2, store_full_data ? record_len + 4 : 4));
-    index_manager[hash] = std::make_shared<IndexMeta>(fields, false, tree);
-  } else {
+  if (it != index_manager.end()) {
     it->second->refcount++;
+    return;
+  }
+  std::string filename = index_prefix + std::to_string(hash);
+  auto tree = std::shared_ptr<BPlusTree>(new BPlusTree(
+      filename, fields.size() + 2, store_full_data ? record_len + 4 : 4));
+  auto iter = RecordIterator(record_manager, {}, fields, {});
+  auto index = std::make_shared<IndexMeta>(fields, false, tree);
+  while (iter.get_next_valid_no_check()) {
+    auto [pagenum, slotnum] = iter.get_locator();
+    auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
+    auto keys =
+        index->extractKeys(InsertCollection(pagenum, slotnum, record_ref));
+    if (enable_unique_check) {
+      auto req = tree->bounded_match(keys, Operator::LE);
+      if (index->approx_eq(req.keyptr, keys.data())) {
+        printf("!ERROR\nduplicate key found.\n");
+        has_err = true;
+        return;
+      }
+    }
+    index->insert_record(InsertCollection(pagenum, slotnum, record_ref));
+  }
+  index_manager[hash] = index;
+}
+
+void TableManager::drop_index(key_hash_t hash) {
+  auto it = index_manager.find(hash);
+  if (it == index_manager.end()) {
+    return;
+  }
+  if (--it->second->refcount == 0) {
+    it->second->tree->purge();
+    index_manager.erase(it);
   }
 }
 
 void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
   if (primary_key == nullptr) {
     pk->build(this);
-    add_index(pk->fields, true);
+    add_index(pk->fields, true, true);
     pk->index = get_index(keysHash(pk->fields));
-    primary_key = pk;
+    if (pk->index != nullptr) {
+      primary_key = pk;
+      for (auto field : pk->fields) {
+        field->notnull = true;
+      }
+    }
   } else {
     bool ok = true;
     if (primary_key->key_name != pk->key_name) {
@@ -353,7 +378,17 @@ void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
       ok = ok && (primary_key->field_names[i] == pk->field_names[i]);
     }
     if (!ok) {
-      printf("!ERROR\ntrying to create multiple primary keys.");
+      printf("!ERROR\ntrying to create multiple primary keys.\n");
     }
   }
+}
+
+void TableManager::drop_pk() {
+  if (primary_key->num_fk_refs) {
+    printf("!ERROR\npk is referenced by foreign key.\n");
+    has_err = true;
+    return;
+  }
+  drop_index(keysHash(primary_key->fields));
+  primary_key = nullptr;
 }

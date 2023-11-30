@@ -28,6 +28,18 @@ struct IndexMeta {
   remap(const std::vector<std::shared_ptr<Field>> &keys) const;
   void serialize(SequentialAccessor &s) const;
 
+  bool approx_eq(int *entry, int *query) const {
+    auto trailing = entry[key_offset.size() + 1];
+    if (trailing == INT_MAX || trailing == INT_MIN) {
+      return false;
+    }
+    for (size_t i = 0; i < key_offset.size(); ++i) {
+      if (entry[i] != query[i])
+        return false;
+    }
+    return true;
+  }
+
   std::vector<int> extractKeys(const InsertCollection &data);
   void insert_record(InsertCollection data);
   BPlusQueryResult bounded_match(Operator op, InsertCollection data);

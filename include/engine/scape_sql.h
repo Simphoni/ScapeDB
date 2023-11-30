@@ -24,5 +24,7 @@ void delete_from_table(
     std::vector<std::shared_ptr<WhereConstraint>> &&where_constraints);
 void insert_from_file(const std::string &file_path,
                       const std::string &table_name);
+void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key);
+void drop_pk(const std::string &table_name, const std::string &pk_name);
 
 } // namespace ScapeSQL

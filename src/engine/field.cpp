@@ -206,6 +206,7 @@ std::shared_ptr<KeyBase> KeyBase::build(KeyType type) {
 void PrimaryKey::serialize(SequentialAccessor &s) const {
   s.write_byte(random_name);
   s.write_str(key_name);
+  s.write<uint32_t>(num_fk_refs);
   s.write<uint32_t>(field_names.size());
   for (auto &str : field_names) {
     s.write_str(str);
@@ -215,6 +216,7 @@ void PrimaryKey::serialize(SequentialAccessor &s) const {
 void PrimaryKey::deserialize(SequentialAccessor &s) {
   random_name = s.read_byte();
   key_name = s.read_str();
+  num_fk_refs = s.read<uint32_t>();
   uint32_t sz = s.read<uint32_t>();
   for (uint32_t i = 0; i < sz; ++i) {
     field_names.push_back(s.read_str());

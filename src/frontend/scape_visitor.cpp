@@ -275,7 +275,7 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
   }
   if (n_primary > 1) {
     has_err = true;
-    puts("ERROR: table created with multiple primary keys.");
+    puts("ERROR: table created with multiple primary keys.\n");
     return std::any();
   }
   return fields;
@@ -336,7 +336,7 @@ ScapeVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
   }
   if (ctx->identifiers().size() != 2) {
     has_err = true;
-    puts("ERROR: must specify both local key and reference key");
+    puts("ERROR: must specify both local key and reference key\n");
     return std::any();
   }
   foreign->field_names = std::any_cast<std::vector<std::string>>(
@@ -390,7 +390,7 @@ std::any ScapeVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
     auto field = table->get_field(col_name);
     if (field == nullptr) {
       has_err = true;
-      printf("ERROR: column %s not found", col_name.data());
+      printf("ERROR: column %s not found\n", col_name.data());
       return std::any();
     }
     set_vars.push_back(SetVariable(field, ctx->value(i)->accept(this)));
@@ -571,13 +571,27 @@ std::any ScapeVisitor::visitWhere_operator_expression(
 std::any ScapeVisitor::visitAlter_table_add_pk(
     SQLParser::Alter_table_add_pkContext *ctx) {
   auto pk = std::make_shared<PrimaryKey>();
-  if (ctx->Identifier().size() >= 1) {
+  if (ctx->Identifier().size() > 1) {
     pk->random_name = false;
-    pk->key_name = ctx->Identifier(0)->getText();
+    pk->key_name = ctx->Identifier(1)->getText();
   } else {
     pk->random_name = true;
     pk->key_name = generate_random_string();
   }
   pk->field_names =
       std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
+  ScapeSQL::add_pk(ctx->Identifier(0)->getText(), pk);
+  return std::any();
+}
+
+/// 'ALTER' 'TABLE' Identifier 'DROP' 'PRIMARY' 'KEY' (Identifier)?
+std::any ScapeVisitor::visitAlter_table_drop_pk(
+    SQLParser::Alter_table_drop_pkContext *ctx) {
+  if (ctx->Identifier().size() == 2) {
+    ScapeSQL::drop_pk(ctx->Identifier(0)->getText(),
+                      ctx->Identifier(1)->getText());
+  } else {
+    ScapeSQL::drop_pk(ctx->Identifier(0)->getText(), "");
+  }
+  return std::any();
 }

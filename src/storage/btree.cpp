@@ -1,5 +1,6 @@
 #include <climits>
 #include <cstring>
+#include <filesystem>
 #include <queue>
 
 #include <storage/btree.h>
@@ -528,6 +529,8 @@ BPlusTree::BPlusTree(const std::string &filename, int key_num, int record_len)
     keys[i + key_num] = INT_MAX;
   }
 }
+
+void BPlusTree::purge() { std::filesystem::remove(filename); }
 
 void BPlusTree::print() const {
   std::queue<int> Q;

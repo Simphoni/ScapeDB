@@ -137,6 +137,8 @@ public:
   bool check_insert_valid(uint8_t *ptr);
 
   void add_index(const std::vector<std::shared_ptr<Field>> &fields,
-                 bool store_full_data);
+                 bool store_full_data, bool enable_unique_check);
+  void drop_index(key_hash_t hash);
   void add_pk(std::shared_ptr<PrimaryKey> field);
+  void drop_pk();
 };

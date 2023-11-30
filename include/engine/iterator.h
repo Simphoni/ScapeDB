@@ -75,11 +75,11 @@ public:
   /// @param cons will be filtered
   /// @param fileds_src fields directly taken from table_manager
   /// @param fields_dst will be filtered with fields_src
+  RecordIterator() = delete;
   RecordIterator(std::shared_ptr<RecordManager> rec,
                  const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                  const std::vector<std::shared_ptr<Field>> &fields_src,
                  const std::vector<std::shared_ptr<Field>> &fields_dst);
-  RecordIterator();
   ~RecordIterator();
   bool get_next_valid_no_check();
   bool get_next_valid() override;

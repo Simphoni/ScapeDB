@@ -100,6 +100,7 @@ struct KeyBase {
 };
 
 struct PrimaryKey : public KeyBase {
+  int num_fk_refs{0};
 
   PrimaryKey() { type = PRIMARY; }
   void serialize(SequentialAccessor &s) const override;

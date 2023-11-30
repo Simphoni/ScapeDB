@@ -87,4 +87,7 @@ public:
 
   std::any
   visitAlter_table_add_pk(SQLParser::Alter_table_add_pkContext *ctx) override;
+
+  std::any
+  visitAlter_table_drop_pk(SQLParser::Alter_table_drop_pkContext *ctx) override;
 };

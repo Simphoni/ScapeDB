@@ -113,5 +113,6 @@ public:
   bool erase(const std::vector<int> &key);
 
   void serialize(SequentialAccessor &accessor) const;
+  void purge();
   void print() const;
 };

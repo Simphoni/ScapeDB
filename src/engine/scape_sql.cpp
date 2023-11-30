@@ -118,17 +118,10 @@ void describe_table(const std::string &s) {
   const auto &fields = tbl->get_fields();
   std::vector<std::string> table{"Field", "Type", "Null", "Default"};
   table.reserve(fields.size() * 4 + 4);
-  std::set<unified_id_t> pk_fields;
-  if (tbl->get_primary_key() != nullptr) {
-    for (auto &str : tbl->get_primary_key()->field_names) {
-      pk_fields.insert(tbl->get_field(str)->field_id);
-    }
-  }
   for (const auto &field : fields) {
     table.push_back(field->field_name);
     table.push_back(field->type_str());
-    table.push_back(
-        field->notnull || pk_fields.contains(field->field_id) ? "NO" : "YES");
+    table.push_back(field->notnull ? "NO" : "YES");
     if (field->dtype_meta->has_default_val) {
       table.push_back(field->dtype_meta->val_str());
     } else {
@@ -315,17 +308,43 @@ void insert_from_file(const std::string &file_path,
 void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key) {
   auto db = ScapeFrontend::get()->get_current_db_manager();
   if (db == nullptr) {
-    printf("ERROR: no database selected.");
+    printf("ERROR: no database selected.\n");
     has_err = true;
     return;
   }
   auto table = db->get_table_manager(table_name);
   if (table == nullptr) {
-    printf("ERROR: table %s doesn't exist.", table_name.data());
+    printf("ERROR: table %s doesn't exist.\n", table_name.data());
     has_err = true;
     return;
   }
   table->add_pk(key);
+}
+
+void drop_pk(const std::string &table_name, const std::string &pk_name) {
+  auto db = ScapeFrontend::get()->get_current_db_manager();
+  if (db == nullptr) {
+    printf("ERROR: no database selected.\n");
+    has_err = true;
+    return;
+  }
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s doesn't exist.\n", table_name.data());
+    has_err = true;
+    return;
+  }
+  if (table->get_primary_key() == nullptr) {
+    printf("!ERROR\ntable %s doesn't have a primary key.\n", table_name.data());
+    has_err = true;
+    return;
+  }
+  if (pk_name != "" && pk_name != table->get_primary_key()->key_name) {
+    printf("!ERROR\nprimary key %s doesn't exist.\n", pk_name.data());
+    has_err = true;
+    return;
+  }
+  table->drop_pk();
 }
 
 } // namespace ScapeSQL
