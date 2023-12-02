@@ -34,7 +34,7 @@ struct IntType : public DataTypeBase {
   using DType = int;
   DType value;
 
-  IntType() { type = INT; }
+  IntType() { type = DataType::INT; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stoi(s);
@@ -52,7 +52,7 @@ struct FloatType : public DataTypeBase {
   using DType = double;
   DType value;
 
-  FloatType() { type = FLOAT; }
+  FloatType() { type = DataType::FLOAT; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = std::stod(s);
@@ -70,7 +70,7 @@ struct VarcharType : public DataTypeBase {
   uint32_t mxlen;
   std::string value;
 
-  VarcharType() { type = VARCHAR; }
+  VarcharType() { type = DataType::VARCHAR; }
   void set_default_value(const std::string &s) override {
     has_default_val = true;
     value = s;
@@ -104,7 +104,7 @@ struct KeyBase {
 struct PrimaryKey : public KeyBase {
   int num_fk_refs{0};
 
-  PrimaryKey() { type = PRIMARY; }
+  PrimaryKey() { type = KeyType::PRIMARY; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
   void build(const TableManager *table);
@@ -116,12 +116,19 @@ struct ForeignKey : public KeyBase {
   std::vector<std::string> ref_field_names;
   std::vector<std::shared_ptr<Field>> ref_fields;
 
-  ForeignKey() { type = FOREIGN; }
+  ForeignKey() { type = KeyType::FOREIGN; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
   void build(const TableManager *table,
              std::shared_ptr<const DatabaseManager> db);
   inline key_hash_t ref_hash() { return keysHash(ref_fields); }
+};
+
+struct ExplicitIndexKey : public KeyBase {
+  ExplicitIndexKey() { type = KeyType::EXPLICIT_INDEX; }
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(const TableManager *table);
 };
 
 struct Field {

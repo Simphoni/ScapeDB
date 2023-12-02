@@ -26,6 +26,7 @@ struct KeyBase;
 struct NormalHolder;
 struct PrimaryKey;
 struct ForeignKey;
+struct ExplicitIndexKey;
 struct Field;
 
 /// query.h
@@ -61,6 +62,7 @@ std::string datatype2str(DataType type);
 enum KeyType : uint8_t {
   PRIMARY = 1,
   FOREIGN,
+  EXPLICIT_INDEX,
 };
 
 std::string keytype2str(KeyType type);

@@ -65,5 +65,6 @@ void IndexMeta::insert_record(KeyCollection data) {
 
 uint32_t *IndexMeta::get_refcount(uint8_t *ptr) {
   auto ret = bounded_match(Operator::LE, KeyCollection(INT_MAX, INT_MAX, ptr));
+  PagedBuffer::get()->mark_dirty(ret.dataptr);
   return (uint32_t *)(ret.dataptr + tree->get_record_len());
 }

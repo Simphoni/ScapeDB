@@ -46,6 +46,7 @@ void ScapeFrontend::execute(const std::string &stmt) {
   auto beg = ch::high_resolution_clock::now();
   parse(stmt);
   auto end = ch::high_resolution_clock::now();
-  printf("@ time consumed: %.3lf ms\n",
-         ch::duration_cast<ch::microseconds>(end - beg).count() * 1e-3);
+  printf("@ time consumed: %.3lf ms, stmt=%s\n",
+         ch::duration_cast<ch::microseconds>(end - beg).count() * 1e-3,
+         stmt.data());
 }

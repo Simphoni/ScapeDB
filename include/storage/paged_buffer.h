@@ -55,9 +55,9 @@ public:
   }
 
   // read a specific page from a file
-  uint8_t *read_file(PageLocator pos);
+  uint8_t *read_file_rd(PageLocator pos);
   // mark as dirty from beginning
-  uint8_t *read_temp_file(PageLocator pos);
+  uint8_t *read_file_rdwr(PageLocator pos);
   bool mark_dirty(uint8_t *ptr);
 };
 
@@ -70,7 +70,7 @@ private:
     assert(cur <= tailptr);
     if (cur == tailptr) {
       pagenum++;
-      headptr = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum));
+      headptr = PagedBuffer::get()->read_file_rd(std::make_pair(fd, pagenum));
       cur = headptr;
       tailptr = headptr + Config::PAGE_SIZE;
     }

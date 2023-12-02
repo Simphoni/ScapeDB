@@ -96,4 +96,10 @@ public:
 
   std::any visitAlter_table_drop_foreign_key(
       SQLParser::Alter_table_drop_foreign_keyContext *ctx) override;
+
+  std::any
+  visitAlter_add_index(SQLParser::Alter_add_indexContext *ctx) override;
+
+  std::any
+  visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) override;
 };

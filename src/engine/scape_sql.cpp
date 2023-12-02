@@ -20,6 +20,14 @@ namespace ScapeSQL {
     return;                                                                    \
   }
 
+#define CHECK_TABLE_EXISTS(db, table_name, table)                              \
+  auto table = db->get_table_manager(table_name);                              \
+  if (table == nullptr) {                                                      \
+    printf("ERROR: table %s does not exist\n", table_name.data());             \
+    has_err = true;                                                            \
+    return;                                                                    \
+  }
+
 void create_db(const std::string &s) {
   if (GlobalManager::get()->get_db_manager(s) != nullptr) {
     printf("ERROR: database %s already exists\n", s.data());
@@ -100,32 +108,28 @@ static void print_list(const std::vector<std::string> &s) {
   putchar(')');
 }
 
-void describe_table(const std::string &s) {
+void describe_table(const std::string &table_name) {
   CHECK_DB_EXISTS(db);
-  auto tbl = db->get_table_manager(s);
-  if (tbl == nullptr) {
-    printf("ERROR: table %s does not exist\n", s.data());
-    return;
-  }
-  const auto &fields = tbl->get_fields();
-  std::vector<std::string> table{"Field", "Type", "Null", "Default"};
-  table.reserve(fields.size() * 4 + 4);
+  CHECK_TABLE_EXISTS(db, table_name, table);
+  const auto &fields = table->get_fields();
+  std::vector<std::string> content{"Field", "Type", "Null", "Default"};
+  content.reserve(fields.size() * 4 + 4);
   for (const auto &field : fields) {
-    table.push_back(field->field_name);
-    table.push_back(field->type_str());
-    table.push_back(field->notnull ? "NO" : "YES");
+    content.push_back(field->field_name);
+    content.push_back(field->type_str());
+    content.push_back(field->notnull ? "NO" : "YES");
     if (field->dtype_meta->has_default_val) {
-      table.push_back(field->dtype_meta->val_str());
+      content.push_back(field->dtype_meta->val_str());
     } else {
-      table.push_back("NULL");
+      content.push_back("NULL");
     }
   }
-  Logger::tabulate(table, table.size() / 4, 4);
+  Logger::tabulate(content, content.size() / 4, 4);
 
   if (Config::get()->batch_mode) {
     puts("");
   }
-  auto pk = tbl->get_primary_key();
+  auto pk = table->get_primary_key();
   if (pk != nullptr) {
     assert(pk != nullptr);
     printf("PRIMARY KEY ");
@@ -135,7 +139,7 @@ void describe_table(const std::string &s) {
     print_list(pk->field_names);
     puts(";");
   }
-  auto foreign_keys = tbl->get_foreign_keys();
+  auto foreign_keys = table->get_foreign_keys();
   for (auto fk : foreign_keys) {
     assert(fk != nullptr);
     printf("FOREIGN KEY ");
@@ -214,11 +218,7 @@ void delete_from_table(
 void insert_from_file(const std::string &file_path,
                       const std::string &table_name) {
   CHECK_DB_EXISTS(db);
-  auto table = db->get_table_manager(table_name);
-  if (table == nullptr) {
-    printf("ERROR: table %s does not exist\n", table_name.data());
-    return;
-  }
+  CHECK_TABLE_EXISTS(db, table_name, table);
   const std::vector<std::shared_ptr<Field>> fields = table->get_fields();
   int column_num = fields.size();
   std::vector<int> offsets;
@@ -297,21 +297,13 @@ void insert_from_file(const std::string &file_path,
 
 void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key) {
   CHECK_DB_EXISTS(db);
-  auto table = db->get_table_manager(table_name);
-  if (table == nullptr) {
-    printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    return;
-  }
+  CHECK_TABLE_EXISTS(db, table_name, table);
   table->add_pk(key);
 }
 
 void drop_pk(const std::string &table_name, const std::string &pk_name) {
   CHECK_DB_EXISTS(db);
-  auto table = db->get_table_manager(table_name);
-  if (table == nullptr) {
-    printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    return;
-  }
+  CHECK_TABLE_EXISTS(db, table_name, table);
   if (table->get_primary_key() == nullptr) {
     Logger::tabulate({"!ERROR", "primary (0-1)"}, 2, 1);
     return;
@@ -325,22 +317,27 @@ void drop_pk(const std::string &table_name, const std::string &pk_name) {
 
 void add_fk(const std::string &table_name, std::shared_ptr<ForeignKey> key) {
   CHECK_DB_EXISTS(db);
-  auto table = db->get_table_manager(table_name);
-  if (table == nullptr) {
-    printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    return;
-  }
+  CHECK_TABLE_EXISTS(db, table_name, table);
   table->add_fk(key);
 }
 
 void drop_fk(const std::string &table_name, const std::string &fk_name) {
   CHECK_DB_EXISTS(db);
-  auto table = db->get_table_manager(table_name);
-  if (table == nullptr) {
-    printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    return;
-  }
+  CHECK_TABLE_EXISTS(db, table_name, table);
   table->drop_fk(fk_name);
+}
+
+void add_index(const std::string &table_name,
+               std::shared_ptr<ExplicitIndexKey> key) {
+  CHECK_DB_EXISTS(db);
+  CHECK_TABLE_EXISTS(db, table_name, table);
+  table->add_explicit_index(key);
+}
+
+void drop_index(const std::string &table_name, const std::string &index_name) {
+  CHECK_DB_EXISTS(db);
+  CHECK_TABLE_EXISTS(db, table_name, table);
+  table->drop_explicit_index(index_name);
 }
 
 } // namespace ScapeSQL

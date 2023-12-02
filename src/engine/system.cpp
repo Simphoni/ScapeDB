@@ -189,6 +189,13 @@ void TableManager::deserialize() {
     foreign_keys[i] = std::make_shared<ForeignKey>();
     foreign_keys[i]->deserialize(accessor);
   }
+  int idxcount = accessor.read<uint32_t>();
+  explicit_index_keys.resize(idxcount);
+  for (int i = 0; i < idxcount; i++) {
+    explicit_index_keys[i] = std::make_shared<ExplicitIndexKey>();
+    explicit_index_keys[i]->deserialize(accessor);
+    explicit_index_keys[i]->build(this);
+  }
 }
 
 /// construct from create_table SQL query
@@ -258,8 +265,12 @@ TableManager::~TableManager() {
     primary_key->serialize(accessor);
   }
   accessor.write<uint32_t>(foreign_keys.size());
-  for (const auto &field : foreign_keys) {
-    field->serialize(accessor);
+  for (const auto &fk : foreign_keys) {
+    fk->serialize(accessor);
+  }
+  accessor.write<uint32_t>(explicit_index_keys.size());
+  for (const auto &ik : explicit_index_keys) {
+    ik->serialize(accessor);
   }
 }
 
@@ -280,8 +291,6 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
 
 void TableManager::purge() {
   if (primary_key != nullptr && primary_key->num_fk_refs) {
-    /// DEBUG
-    /// printf("%d\n", primary_key->num_fk_refs);
     Logger::tabulate({"!ERROR", "foreign (pk refed)"}, 2, 1);
     has_err = true;
     return;
@@ -331,9 +340,7 @@ void TableManager::erase_record(int pn, int sn, bool enable_checking) {
   temp_buf.resize(record_len);
   auto ptr = record_manager->get_record_ref(pn, sn);
   memcpy(temp_buf.data(), ptr, record_len);
-  if (enable_checking && !check_erase_validity(ptr)) {
-    /// DEBUG
-    // puts("CAUGHT");
+  if (enable_checking && !check_erase_validity(temp_buf.data())) {
     return;
   }
   for (auto [_, index] : index_manager) {
@@ -374,10 +381,10 @@ bool TableManager::check_insert_validity(uint8_t *ptr) {
 bool TableManager::check_erase_validity(uint8_t *ptr) {
   if (primary_key != nullptr) {
     auto refcnt = primary_key->index->get_refcount(ptr);
-    /// DEBUG
-    /// fprintf(stderr, "%d\n", *refcnt);
-    if ((*refcnt) != 0) {
-      Logger::tabulate({"!ERROR", "foreign (erase)"}, 2, 1);
+    if (*refcnt != 0) {
+      Logger::tabulate(
+          {"!ERROR", "foreign (erase: refcnt=" + std::to_string(*refcnt) + ")"},
+          2, 1);
       has_err = true;
       return false;
     }
@@ -495,8 +502,8 @@ void TableManager::add_fk(std::shared_ptr<ForeignKey> fk) {
   while (it.get_next_valid_no_check()) {
     auto [pn, sn] = it.get_locator();
     auto ptr = record_manager->get_record_ref(pn, sn);
-    auto ref_cnt = fk->index->get_refcount(ptr);
-    ++(*ref_cnt);
+    auto refcnt = fk->index->get_refcount(ptr);
+    ++(*refcnt);
   }
   foreign_keys.push_back(fk);
 }
@@ -514,12 +521,36 @@ void TableManager::drop_fk(const std::string &fk_name) {
       while (rec_it.get_next_valid_no_check()) {
         auto [pn, sn] = rec_it.get_locator();
         auto ptr = record_manager->get_record_ref(pn, sn);
-        auto ref_cnt = fk->index->get_refcount(ptr);
-        --(*ref_cnt);
+        auto refcnt = fk->index->get_refcount(ptr);
+        --(*refcnt);
       }
       foreign_keys.erase(it);
       return;
     }
   }
   printf("ERROR: fk %s not found.\n", fk_name.data());
+}
+
+void TableManager::add_explicit_index(std::shared_ptr<ExplicitIndexKey> idx) {
+  for (auto it : explicit_index_keys) {
+    if (it->key_name == idx->key_name) {
+      printf("ERROR: explicit indexes should have distinct names.\n");
+      return;
+    }
+  }
+  idx->build(this);
+  add_index(idx->fields, true, false);
+  explicit_index_keys.push_back(idx);
+}
+
+void TableManager::drop_explicit_index(const std::string &idx_name) {
+  for (auto it = explicit_index_keys.begin(); it != explicit_index_keys.end();
+       ++it) {
+    if ((*it)->key_name == idx_name) {
+      drop_index((*it)->local_hash());
+      explicit_index_keys.erase(it);
+      return;
+    }
+  }
+  printf("ERROR: explicit index %s not found.\n", idx_name.data());
 }

@@ -58,7 +58,7 @@ void RecordManager::serialize(SequentialAccessor &accessor) {
 }
 
 uint8_t *RecordManager::get_record_ref(int pageid, int slotid) {
-  uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, pageid));
+  uint8_t *slice = PagedBuffer::get()->read_file_rd(std::make_pair(fd, pageid));
   return slice + header_len + slotid * record_len;
 }
 
@@ -66,14 +66,14 @@ std::pair<int, int> RecordManager::insert_record(const uint8_t *ptr) {
   if (ptr_available == -1) {
     ptr_available = n_pages++;
     current_page =
-        PagedBuffer::get()->read_file(std::make_pair(fd, ptr_available));
+        PagedBuffer::get()->read_file_rd(std::make_pair(fd, ptr_available));
     int *header = reinterpret_cast<int *>(current_page);
     header[0] = -1;
     memset(current_page + BITMAP_START_OFFSET, 0,
            sizeof(uint64_t) * headmask_size);
   } else {
     current_page =
-        PagedBuffer::get()->read_file(std::make_pair(fd, ptr_available));
+        PagedBuffer::get()->read_file_rd(std::make_pair(fd, ptr_available));
   }
   PagedBuffer::get()->mark_dirty(current_page);
   headmask = std::make_shared<FixedBitmap>(
@@ -91,7 +91,7 @@ std::pair<int, int> RecordManager::insert_record(const uint8_t *ptr) {
 }
 
 void RecordManager::erase_record(int pageid, int slotid) {
-  current_page = PagedBuffer::get()->read_file(std::make_pair(fd, pageid));
+  current_page = PagedBuffer::get()->read_file_rd(std::make_pair(fd, pageid));
   PagedBuffer::get()->mark_dirty(current_page);
   headmask = std::make_shared<FixedBitmap>(
       headmask_size, (uint64_t *)(current_page + BITMAP_START_OFFSET));

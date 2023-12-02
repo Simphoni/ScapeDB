@@ -114,7 +114,7 @@ void BPlusTree::leaf_insert(uint8_t *slice, const std::vector<int> &key,
   page_array_insert(NodeType::LEAF, keys, data, meta->size, pos);
   memcpy(keys + pos * key_num, key.data(), key_num * sizeof(int));
   memcpy(data + pos * leaf_data_len, record, leaf_data_len - 4);
-  *((int *)(data + (pos + 1) * leaf_data_len - 4)) = 0;
+  *((uint32_t *)(data + (pos + 1) * leaf_data_len - 4)) = 0;
   ++meta->size;
 }
 
@@ -126,7 +126,7 @@ void BPlusTree::leaf_split(int pagenum, uint8_t *slice,
   uint8_t *data, *nwdata;
   int nwpage = alloc_page();
   uint8_t *nwslice =
-      PagedBuffer::get()->read_temp_file(std::make_pair(fd, nwpage));
+      PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, nwpage));
   prepare_from_slice(slice, meta, keys, data);
   prepare_from_slice(nwslice, nwmeta, nwkeys, nwdata, NodeType::LEAF);
 
@@ -175,7 +175,7 @@ void BPlusTree::internal_split(int pagenum, uint8_t *slice,
   uint8_t *data, *nwdata;
   int nwpage = alloc_page();
   uint8_t *nwslice =
-      PagedBuffer::get()->read_temp_file(std::make_pair(fd, nwpage));
+      PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, nwpage));
   prepare_from_slice(slice, meta, keys, data);
   prepare_from_slice(nwslice, nwmeta, nwkeys, nwdata, NodeType::INTERNAL);
 
@@ -208,7 +208,7 @@ void BPlusTree::insert(const std::vector<int> &key, const uint8_t *record) {
   BPlusNodeMeta *meta;
   int *keys;
   while (true) {
-    slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, pagenum_cur));
+    slice = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, pagenum_cur));
     prepare_from_slice(slice, meta, keys, data);
     if (meta->type == NodeType::LEAF) {
       break;
@@ -234,7 +234,7 @@ void BPlusTree::insert(const std::vector<int> &key, const uint8_t *record) {
     if (stack.size() == 0) {
       assert(pagenum_cur == pagenum_root);
       int nwpage = alloc_page();
-      slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, nwpage));
+      slice = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, nwpage));
       prepare_from_slice(slice, meta, keys, data, NodeType::INTERNAL);
       for (int i = 0; i < key_num; i++)
         keys[i] = INT_MIN;
@@ -249,7 +249,7 @@ void BPlusTree::insert(const std::vector<int> &key, const uint8_t *record) {
     }
     pagenum_cur = stack.back();
     stack.pop_back();
-    slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, pagenum_cur));
+    slice = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, pagenum_cur));
     prepare_from_slice(slice, meta, keys, data);
     if (meta->size < internal_max) {
       internal_insert(slice, key_pushup, val_pushup);
@@ -267,7 +267,7 @@ bool BPlusTree::erase(const std::vector<int> &key) {
   BPlusNodeMeta *meta, *pmeta, *smeta;
   int *keys, *pkeys, *skeys;
   while (true) {
-    slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, pagenum_cur));
+    slice = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, pagenum_cur));
     prepare_from_slice(slice, meta, keys, data);
     if (meta->type == NodeType::LEAF) {
       break;
@@ -317,7 +317,7 @@ bool BPlusTree::erase(const std::vector<int> &key) {
     kth_cur = stack.back().second;
     stack.pop_back();
     pslice =
-        PagedBuffer::get()->read_temp_file(std::make_pair(fd, pagenum_parent));
+        PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, pagenum_parent));
     prepare_from_slice(pslice, pmeta, pkeys, pdata);
 
     if (propagate_zeroidx) {
@@ -332,7 +332,7 @@ bool BPlusTree::erase(const std::vector<int> &key) {
     if (propagate_delete) {
       kth_sibling = kth_cur == 0 ? 1 : kth_cur - 1;
       pagenum_sibling = ((int *)pdata)[kth_sibling];
-      sslice = PagedBuffer::get()->read_temp_file(
+      sslice = PagedBuffer::get()->read_file_rdwr(
           std::make_pair(fd, pagenum_sibling));
       prepare_from_slice(sslice, smeta, skeys, sdata);
 
@@ -396,7 +396,7 @@ BPlusTree::precise_match(const std::vector<int> &key) const {
   int pagenum_cur = pagenum_root;
   while (true) {
     uint8_t *slice =
-        PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+        PagedBuffer::get()->read_file_rd(std::make_pair(fd, pagenum_cur));
     BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
     int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
     int *data = keys + key_num * get_cap(meta->type);
@@ -442,7 +442,7 @@ BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
   int pagenum_cur = pagenum_root;
   while (true) {
     uint8_t *slice =
-        PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+        PagedBuffer::get()->read_file_rd(std::make_pair(fd, pagenum_cur));
     BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
     int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
     int *data = keys + key_num * get_cap(meta->type);
@@ -455,7 +455,8 @@ BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
       if (idx >= meta->size) {
         pagenum_cur = meta->right_sibling;
         assert(pagenum_cur != -1);
-        slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
+        slice =
+            PagedBuffer::get()->read_file_rd(std::make_pair(fd, pagenum_cur));
         keys = (int *)(slice + sizeof(BPlusNodeMeta));
         data = keys + key_num * get_cap(meta->type);
         return (BPlusQueryResult){pagenum_cur, 0, keys, (uint8_t *)data};
@@ -473,14 +474,14 @@ int BPlusTree::alloc_page() {
   } else {
     int ret = ptr_available;
     uint8_t *slice =
-        PagedBuffer::get()->read_temp_file(std::make_pair(fd, ret));
+        PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, ret));
     ptr_available = ((BPlusNodeMeta *)slice)->next_empty;
     return ret;
   }
 }
 
 void BPlusTree::free_page(int page) {
-  uint8_t *slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, page));
+  uint8_t *slice = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, page));
   ((BPlusNodeMeta *)slice)->next_empty = ptr_available;
   ptr_available = page;
 }
@@ -520,7 +521,7 @@ BPlusTree::BPlusTree(const std::string &filename, int key_num, int record_len)
   ptr_available = -1;
   pagenum_root = alloc_page();
   uint8_t *slice =
-      PagedBuffer::get()->read_temp_file(std::make_pair(fd, pagenum_root));
+      PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, pagenum_root));
   BPlusNodeMeta *meta = (BPlusNodeMeta *)slice;
   int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
   *meta = (BPlusNodeMeta){-1, -1, 2, -1, NodeType::LEAF};
@@ -538,7 +539,7 @@ void BPlusTree::print() const {
   while (Q.size()) {
     int x = Q.front();
     Q.pop();
-    uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, x));
+    uint8_t *slice = PagedBuffer::get()->read_file_rd(std::make_pair(fd, x));
     BPlusNodeMeta *meta;
     int *keys;
     uint8_t *data;

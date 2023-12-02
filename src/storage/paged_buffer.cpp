@@ -75,7 +75,7 @@ int PagedBuffer::get_replace() {
   return x;
 }
 
-uint8_t *PagedBuffer::read_file(PageLocator pos) {
+uint8_t *PagedBuffer::read_file_rd(PageLocator pos) {
   if (!base->is_open(pos.first)) {
     return nullptr;
   }
@@ -93,7 +93,7 @@ uint8_t *PagedBuffer::read_file(PageLocator pos) {
   return pages[id].slice;
 }
 
-uint8_t *PagedBuffer::read_temp_file(PageLocator pos) {
+uint8_t *PagedBuffer::read_file_rdwr(PageLocator pos) {
   if (!base->is_open(pos.first)) {
     return nullptr;
   }
@@ -124,14 +124,14 @@ bool PagedBuffer::mark_dirty(uint8_t *ptr) {
 
 SequentialAccessor::SequentialAccessor(int fd) : fd(fd) {
   pagenum = 0;
-  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, 0));
+  headptr = PagedBuffer::get()->read_file_rd(std::make_pair(fd, 0));
   cur = headptr;
   tailptr = headptr + Config::PAGE_SIZE;
 }
 
 void SequentialAccessor::reset(int pagenum_) {
   pagenum = pagenum_;
-  headptr = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum));
+  headptr = PagedBuffer::get()->read_file_rd(std::make_pair(fd, pagenum));
   cur = headptr;
   tailptr = headptr + Config::PAGE_SIZE;
 }

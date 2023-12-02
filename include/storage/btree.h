@@ -97,6 +97,7 @@ public:
   BPlusTree(const std::string &filename, int key_num, int record_len);
   BPlusTree(SequentialAccessor &accessor);
 
+  inline int get_fd() const { return fd; }
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
   }

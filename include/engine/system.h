@@ -90,6 +90,7 @@ private:
   /// constraints
   std::shared_ptr<PrimaryKey> primary_key;
   std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
+  std::vector<std::shared_ptr<ExplicitIndexKey>> explicit_index_keys;
 
   int table_id;
   int record_len;
@@ -145,4 +146,6 @@ public:
   void drop_pk();
   void add_fk(std::shared_ptr<ForeignKey> fk);
   void drop_fk(const std::string &fk_name);
+  void add_explicit_index(std::shared_ptr<ExplicitIndexKey> idx);
+  void drop_explicit_index(const std::string &idx_name);
 };

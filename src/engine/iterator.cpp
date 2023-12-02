@@ -8,7 +8,7 @@
 #include <utils/config.h>
 
 const uint8_t *Iterator::get() const {
-  uint8_t *current_dst_page = PagedBuffer::get()->read_file(
+  uint8_t *current_dst_page = PagedBuffer::get()->read_file_rd(
       std::make_pair(fd_dst, dst_iter / record_per_page));
   return current_dst_page + (dst_iter % record_per_page) * record_len;
 }
@@ -76,7 +76,7 @@ bool RecordIterator::get_next_valid_no_check() {
     pagenum_src++;
     while (pagenum_src < record_manager->n_pages) {
       current_src_page =
-          PagedBuffer::get()->read_file(std::make_pair(fd_src, pagenum_src));
+          PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
       FixedBitmap bits(record_manager->headmask_size,
                        (uint64_t *)(current_src_page + BITMAP_START_OFFSET));
       if (bits.n_ones > 0) {
@@ -134,7 +134,7 @@ int RecordIterator::fill_next_block() {
 
     int dst_slot = i % record_per_page;
     /// A bug was fixed here, always read before buffering
-    uint8_t *current_dst_page = PagedBuffer::get()->read_file(
+    uint8_t *current_dst_page = PagedBuffer::get()->read_file_rd(
         std::make_pair(fd_dst, i / record_per_page));
     PagedBuffer::get()->mark_dirty(current_dst_page);
     auto ptr_dst = current_dst_page + dst_slot * record_len;
@@ -303,7 +303,7 @@ int JoinIterator::fill_next_block() {
     bitmap_t src_bitmap_rhs = *(const bitmap_t *)ptr_rhs;
 
     int dst_slot = i % record_per_page;
-    uint8_t *current_dst_page = PagedBuffer::get()->read_file(
+    uint8_t *current_dst_page = PagedBuffer::get()->read_file_rd(
         std::make_pair(fd_dst, i / record_per_page));
     PagedBuffer::get()->mark_dirty(current_dst_page);
     auto ptr_dst = current_dst_page + dst_slot * record_len;

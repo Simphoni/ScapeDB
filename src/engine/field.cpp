@@ -305,6 +305,36 @@ void ForeignKey::build(const TableManager *table,
   built = true;
 }
 
+void ExplicitIndexKey::serialize(SequentialAccessor &s) const {
+  s.write_byte(random_name);
+  s.write_str(key_name);
+  s.write<uint32_t>(field_names.size());
+  for (auto &str : field_names) {
+    s.write_str(str);
+  }
+}
+
+void ExplicitIndexKey::deserialize(SequentialAccessor &s) {
+  random_name = s.read_byte();
+  key_name = s.read_str();
+  uint32_t sz = s.read<uint32_t>();
+  for (uint32_t i = 0; i < sz; ++i) {
+    field_names.push_back(s.read_str());
+  }
+}
+
+void ExplicitIndexKey::build(const TableManager *table) {
+  for (auto &str : field_names) {
+    auto field = table->get_field(str);
+    if (field == nullptr) {
+      printf("ERROR: field %s not found\n", str.c_str());
+      has_err = true;
+      return;
+    }
+    fields.push_back(field);
+  }
+}
+
 /// Field
 
 void Field::serialize(SequentialAccessor &s) const {
