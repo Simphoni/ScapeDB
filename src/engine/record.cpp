@@ -1,6 +1,6 @@
 #include <engine/query.h>
 #include <engine/record.h>
-#include <engine/system_manager.h>
+#include <engine/system.h>
 #include <storage/paged_buffer.h>
 #include <storage/storage.h>
 #include <utils/config.h>

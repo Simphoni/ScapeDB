@@ -5,7 +5,7 @@
 #include <engine/defs.h>
 #include <engine/field.h>
 #include <engine/index.h>
-#include <engine/system_manager.h>
+#include <engine/system.h>
 #include <storage/storage.h>
 
 uint64_t cast_f2i(double x) { return *reinterpret_cast<uint64_t *>(&x); }

@@ -6,7 +6,7 @@
 #include <engine/index.h>
 #include <engine/iterator.h>
 #include <engine/record.h>
-#include <engine/system_manager.h>
+#include <engine/system.h>
 #include <storage/storage.h>
 #include <utils/config.h>
 #include <utils/logger.h>

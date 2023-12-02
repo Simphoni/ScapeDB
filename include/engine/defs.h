@@ -4,7 +4,7 @@
 
 #include <storage/defs.h>
 
-/// system_manager.h
+/// system.h
 class GlobalManager;
 class DatabaseManager;
 class TableManager;

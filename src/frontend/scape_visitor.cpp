@@ -5,7 +5,7 @@
 #include <engine/field.h>
 #include <engine/query.h>
 #include <engine/scape_sql.h>
-#include <engine/system_manager.h>
+#include <engine/system.h>
 #include <frontend/frontend.h>
 #include <frontend/scape_visitor.h>
 #include <storage/storage.h>

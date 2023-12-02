@@ -4,7 +4,7 @@
 #include <engine/field.h>
 #include <engine/iterator.h>
 #include <engine/query.h>
-#include <engine/system_manager.h>
+#include <engine/system.h>
 #include <storage/storage.h>
 
 using IType = IntType::DType;
