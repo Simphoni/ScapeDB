@@ -595,3 +595,39 @@ std::any ScapeVisitor::visitAlter_table_drop_pk(
   }
   return std::any();
 }
+
+/// 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'FOREIGN'
+/// 'KEY' '(' identifiers ')' 'REFERENCES' Identifier '(' identifiers ')'
+std::any ScapeVisitor::visitAlter_table_add_foreign_key(
+    SQLParser::Alter_table_add_foreign_keyContext *ctx) {
+  auto fk = std::make_shared<ForeignKey>();
+  if (ctx->Identifier().size() > 2) {
+    fk->random_name = false;
+    fk->key_name = ctx->Identifier(1)->getText();
+    fk->ref_table_name = ctx->Identifier(2)->getText();
+  } else if (ctx->Identifier().size() == 2) {
+    fk->random_name = true;
+    fk->key_name = generate_random_string();
+    fk->ref_table_name = ctx->Identifier(1)->getText();
+  } else {
+    return std::any();
+  }
+  if (ctx->identifiers().size() != 2) {
+    return std::any();
+  }
+
+  fk->field_names = std::any_cast<std::vector<std::string>>(
+      ctx->identifiers(0)->accept(this));
+  fk->ref_field_names = std::any_cast<std::vector<std::string>>(
+      ctx->identifiers(1)->accept(this));
+  ScapeSQL::add_fk(ctx->Identifier(0)->getText(), fk);
+  return std::any();
+}
+
+/// 'ALTER' 'TABLE' Identifier 'DROP' 'FOREIGN' 'KEY' Identifier
+std::any ScapeVisitor ::visitAlter_table_drop_foreign_key(
+    SQLParser::Alter_table_drop_foreign_keyContext *ctx) {
+  ScapeSQL::drop_fk(ctx->Identifier(0)->getText(),
+                    ctx->Identifier(1)->getText());
+  return std::any();
+}

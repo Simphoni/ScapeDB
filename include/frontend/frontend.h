@@ -22,7 +22,6 @@ public:
     }
     return instance;
   }
-  static void manual_cleanup() { instance = nullptr; }
 
   void parse(const std::string &stmt);
   void set_db(const std::string &db_name);

@@ -10,10 +10,10 @@
 
 key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields);
 
-struct InsertCollection {
+struct KeyCollection {
   int pn, sn;
   uint8_t *ptr;
-  InsertCollection(int pn, int sn, uint8_t *ptr) : pn(pn), sn(sn), ptr(ptr) {}
+  KeyCollection(int pn, int sn, uint8_t *ptr) : pn(pn), sn(sn), ptr(ptr) {}
 };
 
 struct IndexMeta {
@@ -42,7 +42,8 @@ struct IndexMeta {
     return true;
   }
 
-  std::vector<int> extractKeys(const InsertCollection &data);
-  void insert_record(InsertCollection data);
-  BPlusQueryResult bounded_match(Operator op, InsertCollection data);
+  std::vector<int> extractKeys(const KeyCollection &data);
+  void insert_record(KeyCollection data);
+  BPlusQueryResult bounded_match(Operator op, KeyCollection data);
+  uint32_t *get_refcount(uint8_t *ptr);
 };

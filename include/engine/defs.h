@@ -14,7 +14,7 @@ class RecordManager;
 
 /// index.h
 struct IndexMeta;
-struct InsertCollection;
+struct KeyCollection;
 class IndexManager;
 
 /// field.h

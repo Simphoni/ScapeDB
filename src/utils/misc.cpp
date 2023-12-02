@@ -29,14 +29,6 @@ void ensure_directory(const std::string &path) {
   }
 }
 
-void manual_cleanup() {
-  GlobalManager::manual_cleanup();
-  ScapeFrontend::manual_cleanup();
-  PagedBuffer::manual_cleanup();
-  FileMapping::manual_cleanup();
-  Config::manual_cleanup();
-}
-
 std::mt19937 mt_rng(std::random_device{}());
 
 std::string generate_random_string() {

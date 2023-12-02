@@ -90,4 +90,10 @@ public:
 
   std::any
   visitAlter_table_drop_pk(SQLParser::Alter_table_drop_pkContext *ctx) override;
+
+  std::any visitAlter_table_add_foreign_key(
+      SQLParser::Alter_table_add_foreign_keyContext *ctx) override;
+
+  std::any visitAlter_table_drop_foreign_key(
+      SQLParser::Alter_table_drop_foreign_keyContext *ctx) override;
 };

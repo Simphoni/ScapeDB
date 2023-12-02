@@ -111,6 +111,7 @@ struct PrimaryKey : public KeyBase {
 };
 
 struct ForeignKey : public KeyBase {
+  bool built{false};
   std::string ref_table_name;
   std::vector<std::string> ref_field_names;
   std::vector<std::shared_ptr<Field>> ref_fields;
@@ -118,7 +119,8 @@ struct ForeignKey : public KeyBase {
   ForeignKey() { type = FOREIGN; }
   void serialize(SequentialAccessor &s) const override;
   void deserialize(SequentialAccessor &s) override;
-  void build(const TableManager *table, std::shared_ptr<const TableManager> db);
+  void build(const TableManager *table,
+             std::shared_ptr<const DatabaseManager> db);
   inline key_hash_t ref_hash() { return keysHash(ref_fields); }
 };
 

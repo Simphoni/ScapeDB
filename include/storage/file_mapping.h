@@ -22,7 +22,6 @@ public:
     }
     return instance;
   }
-  static void manual_cleanup() { instance = nullptr; }
 
   bool create_file(const std::string &file) const;
   int create_temp_file();

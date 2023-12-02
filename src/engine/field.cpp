@@ -266,7 +266,15 @@ void ForeignKey::deserialize(SequentialAccessor &s) {
 }
 
 void ForeignKey::build(const TableManager *table,
-                       std::shared_ptr<const TableManager> ref_table) {
+                       std::shared_ptr<const DatabaseManager> db) {
+  if (built)
+    return;
+  auto ref_table = db->get_table_manager(ref_table_name);
+  if (ref_table == nullptr) {
+    printf("ERROR: referenced table %s not found.\n", ref_table_name.data());
+    has_err = true;
+    return;
+  }
   for (auto &str : field_names) {
     auto field = table->get_field(str);
     if (field == nullptr) {
@@ -286,6 +294,15 @@ void ForeignKey::build(const TableManager *table,
     }
     ref_fields.push_back(field);
   }
+  auto ref_pk = ref_table->get_primary_key();
+  if (ref_hash() != ref_pk->local_hash()) {
+    printf("ERROR: fk not referencing pk.\n");
+    has_err = true;
+    return;
+  }
+  index = ref_table->get_primary_key()->index->remap(fields);
+  ++ref_pk->num_fk_refs;
+  built = true;
 }
 
 /// Field

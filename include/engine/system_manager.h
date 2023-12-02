@@ -29,7 +29,7 @@ public:
     }
     return instance;
   }
-  static void manual_cleanup() { instance = nullptr; }
+  void deserialize();
 
   void create_db(const std::string &s);
   void drop_db(const std::string &s);
@@ -54,15 +54,10 @@ private:
   std::unordered_map<std::string, std::shared_ptr<TableManager>> lookup;
   bool purged{false};
 
-  DatabaseManager(const std::string &name, bool from_file);
-
 public:
   ~DatabaseManager();
-  static std::shared_ptr<DatabaseManager> build(const std::string &name,
-                                                bool from_file) {
-    return std::shared_ptr<DatabaseManager>(
-        new DatabaseManager(name, from_file));
-  }
+  DatabaseManager(const std::string &name);
+  void deserialize();
 
   inline std::string get_name() const noexcept { return db_name; }
   const std::unordered_map<std::string, std::shared_ptr<TableManager>> &
@@ -110,15 +105,17 @@ public:
                const std::string &name, unified_id_t id,
                std::vector<std::shared_ptr<Field>> &&fields);
   ~TableManager();
+  void deserialize();
+  /// used by database manager for from-file construction
   void build_fk();
   void purge();
 
+  /// getters
   inline std::string get_name() const noexcept { return table_name; }
   const std::vector<std::shared_ptr<Field>> &get_fields() const {
     return fields;
   }
   std::shared_ptr<Field> get_field(const std::string &s) const;
-
   std::shared_ptr<IndexMeta> get_index(key_hash_t hash) const {
     auto it = index_manager.find(hash);
     return it == index_manager.end() ? nullptr : it->second;
@@ -131,15 +128,21 @@ public:
   std::shared_ptr<RecordManager> get_record_manager() const noexcept {
     return record_manager;
   }
-
   int get_record_len() const noexcept { return record_len; }
+
+  /// setters - records
+  bool check_insert_validity(uint8_t *ptr);
+  bool check_erase_validity(uint8_t *ptr);
   void insert_record(const std::vector<std::any> &values);
   void insert_record(uint8_t *ptr, bool enable_checking);
-  bool check_insert_valid(uint8_t *ptr);
+  void erase_record(int pn, int sn, bool enable_checking);
 
+  /// setters - indexes
   void add_index(const std::vector<std::shared_ptr<Field>> &fields,
                  bool store_full_data, bool enable_unique_check);
   void drop_index(key_hash_t hash);
-  void add_pk(std::shared_ptr<PrimaryKey> field);
+  void add_pk(std::shared_ptr<PrimaryKey> pk);
   void drop_pk();
+  void add_fk(std::shared_ptr<ForeignKey> fk);
+  void drop_fk(const std::string &fk_name);
 };

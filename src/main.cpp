@@ -16,7 +16,6 @@ std::string const prompt = "scapedb";
 void capture_keyboard_interrupt() {
   signal(SIGINT, [](int) {
     std::cout << "Forced exit due to SIGINT, files can be broken." << std::endl;
-    manual_cleanup();
     std::exit(0);
   });
 }
@@ -61,6 +60,9 @@ int main(int argc, char **argv) {
   stmt.reserve(512);
   loi.reserve(512);
   while (!std::getline(std::cin, loi).eof()) {
+    if (loi.length() >= 2 && loi[0] == '-' && loi[1] == '-') {
+      continue;
+    }
     stmt += loi;
     if (loi == "exit" || loi == "EXIT") {
       break;

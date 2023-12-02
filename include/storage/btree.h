@@ -100,9 +100,7 @@ public:
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
   }
-  std::pair<int, int> get_info() {
-    return std::make_pair(key_num, leaf_data_len);
-  }
+  inline int get_record_len() { return leaf_data_len - 4; }
 
   std::optional<BPlusQueryResult>
   precise_match(const std::vector<int> &key) const;

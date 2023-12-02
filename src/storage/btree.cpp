@@ -113,7 +113,8 @@ void BPlusTree::leaf_insert(uint8_t *slice, const std::vector<int> &key,
 
   page_array_insert(NodeType::LEAF, keys, data, meta->size, pos);
   memcpy(keys + pos * key_num, key.data(), key_num * sizeof(int));
-  memcpy(data + pos * leaf_data_len, record, leaf_data_len);
+  memcpy(data + pos * leaf_data_len, record, leaf_data_len - 4);
+  *((int *)(data + (pos + 1) * leaf_data_len - 4)) = 0;
   ++meta->size;
 }
 
@@ -457,7 +458,6 @@ BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
         slice = PagedBuffer::get()->read_file(std::make_pair(fd, pagenum_cur));
         keys = (int *)(slice + sizeof(BPlusNodeMeta));
         data = keys + key_num * get_cap(meta->type);
-        idx = 0;
         return (BPlusQueryResult){pagenum_cur, 0, keys, (uint8_t *)data};
       }
     } else {
@@ -538,37 +538,37 @@ void BPlusTree::print() const {
   while (Q.size()) {
     int x = Q.front();
     Q.pop();
-    uint8_t *slice = PagedBuffer::get()->read_temp_file(std::make_pair(fd, x));
+    uint8_t *slice = PagedBuffer::get()->read_file(std::make_pair(fd, x));
     BPlusNodeMeta *meta;
     int *keys;
     uint8_t *data;
     prepare_from_slice(slice, meta, keys, data);
-    printf("%d %d %s -- ", x, meta->size,
-           meta->type == NodeType::LEAF ? "LEAF" : "INTERNAL");
+    fprintf(stderr, "%d %d %s -- ", x, meta->size,
+            meta->type == NodeType::LEAF ? "LEAF" : "INTERNAL");
     if (meta->type == INTERNAL) {
       int *t = (int *)data;
       for (int i = 0; i < meta->size; i++) {
-        printf("%d ", t[i]);
+        fprintf(stderr, "%d ", t[i]);
         Q.push(t[i]);
       }
       for (int i = 0; i < meta->size; i++) {
-        printf("(");
+        fprintf(stderr, "(");
         for (int j = 0; j < key_num && j < 3; j++) {
-          printf("%d ", keys[i * key_num + j]);
+          fprintf(stderr, "%d ", keys[i * key_num + j]);
         }
         if (i > 0) {
           assert(compare_key(keys + i * key_num - key_num,
                              keys + i * key_num) == -1);
         }
-        printf(") ");
+        fprintf(stderr, ") ");
       }
     } else {
-      printf("(");
+      fprintf(stderr, "(");
       for (int j = 0; j < key_num; j++) {
-        printf("%d ", keys[j]);
+        fprintf(stderr, "%d ", keys[j]);
       }
-      printf("(");
+      fprintf(stderr, ")");
     }
-    puts("");
+    fprintf(stderr, "\n");
   }
 }

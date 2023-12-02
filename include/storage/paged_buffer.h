@@ -53,7 +53,6 @@ public:
     }
     return instance;
   }
-  static void manual_cleanup() { instance = nullptr; }
 
   // read a specific page from a file
   uint8_t *read_file(PageLocator pos);

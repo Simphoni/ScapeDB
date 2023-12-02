@@ -12,6 +12,14 @@
 
 namespace ScapeSQL {
 
+#define CHECK_DB_EXISTS(db)                                                    \
+  auto db = ScapeFrontend::get()->get_current_db_manager();                    \
+  if (db == nullptr) {                                                         \
+    printf("ERROR: no database selected\n");                                   \
+    has_err = true;                                                            \
+    return;                                                                    \
+  }
+
 void create_db(const std::string &s) {
   if (GlobalManager::get()->get_db_manager(s) != nullptr) {
     printf("ERROR: database %s already exists\n", s.data());
@@ -51,12 +59,8 @@ void use_db(const std::string &s) {
 }
 
 void show_tables() {
-  if (ScapeFrontend::get()->get_current_db_manager() == nullptr) {
-    printf("ERROR: no database selected\n");
-    return;
-  }
-  const auto &tbls =
-      ScapeFrontend::get()->get_current_db_manager()->get_tables();
+  CHECK_DB_EXISTS(db);
+  const auto &tbls = db->get_tables();
   std::vector<std::string> table{"TABLES"};
   table.reserve(tbls.size() + 1);
   for (const auto &tbl : tbls) {
@@ -69,11 +73,7 @@ void create_table(const std::string &s,
                   std::vector<std::shared_ptr<Field>> &&fields) {
   if (has_err)
     return;
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected\n");
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   if (db->get_table_manager(s) != nullptr) {
     printf("ERROR: table %s already exists\n", s.data());
   } else {
@@ -82,11 +82,7 @@ void create_table(const std::string &s,
 }
 
 void drop_table(const std::string &s) {
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected\n");
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   if (db->get_table_manager(s) == nullptr) {
     printf("ERROR: table %s does not exist\n", s.data());
   } else {
@@ -105,11 +101,7 @@ static void print_list(const std::vector<std::string> &s) {
 }
 
 void describe_table(const std::string &s) {
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected\n");
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   auto tbl = db->get_table_manager(s);
   if (tbl == nullptr) {
     printf("ERROR: table %s does not exist\n", s.data());
@@ -170,24 +162,31 @@ void update_set_table(
   // alters:
   // 1. record file - use get_record_ref()
   // 2. index file - there should always be a primary key
-  static std::vector<uint8_t> buf;
-  buf.resize(table->get_record_len());
+  static std::vector<uint8_t> buf_i, buf_o;
+  int record_len = table->get_record_len();
+  buf_i.resize(record_len);
+  buf_o.resize(record_len);
   // TODO: add index iterator to speed up search
   auto record_manager = table->get_record_manager();
-  auto record_iter = std::make_shared<RecordIterator>(
-      record_manager, where_constraints, table->get_fields(),
-      std::vector<std::shared_ptr<Field>>({}));
+  auto record_iter = std::shared_ptr<RecordIterator>(new RecordIterator(
+      record_manager, where_constraints, table->get_fields(), {}));
   [[maybe_unused]] int modified_rows = 0;
   while (record_iter->get_next_valid()) {
-    auto [pagenum, slotnum] = record_iter->get_locator();
-    auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
-    memcpy(buf.data(), record_ref, table->get_record_len());
-    for (auto op : set_variables) {
-      op.set((char *)buf.data());
+    auto [pn, sn] = record_iter->get_locator();
+    auto record_ref = record_manager->get_record_ref(pn, sn);
+    if (!table->check_erase_validity(record_ref))
+      break;
+    memcpy(buf_o.data(), record_ref, record_len);
+    memcpy(buf_i.data(), record_ref, record_len);
+    table->erase_record(pn, sn, false);
+    for (auto op : set_variables)
+      op.set((char *)buf_o.data());
+    if (!table->check_insert_validity(buf_o.data())) {
+      table->insert_record(buf_i.data(), false);
+      break;
     }
-    /// check & update index here
-    memcpy(record_ref, buf.data(), table->get_record_len());
-    modified_rows++;
+    table->insert_record(buf_o.data(), false);
+    ++modified_rows;
   }
   // TODO: uncomment this
   // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
@@ -205,24 +204,16 @@ void delete_from_table(
       record_manager, where_constraints, table->get_fields(),
       std::vector<std::shared_ptr<Field>>({}));
   [[maybe_unused]] int modified_rows = 0;
-  while (record_iter->get_next_valid()) {
-    auto [pagenum, slotnum] = record_iter->get_locator();
-    [[maybe_unused]] auto record_ref =
-        record_manager->get_record_ref(pagenum, slotnum);
-    /// TODO: perform checking
-    record_manager->erase_record(pagenum, slotnum);
-    modified_rows++;
+  while (record_iter->get_next_valid() && !has_err) {
+    auto [pn, sn] = record_iter->get_locator();
+    table->erase_record(pn, sn, true);
   }
   // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
 }
 
 void insert_from_file(const std::string &file_path,
                       const std::string &table_name) {
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected\n");
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   auto table = db->get_table_manager(table_name);
   if (table == nullptr) {
     printf("ERROR: table %s does not exist\n", table_name.data());
@@ -305,45 +296,51 @@ void insert_from_file(const std::string &file_path,
 }
 
 void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key) {
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected.\n");
-    has_err = true;
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   auto table = db->get_table_manager(table_name);
   if (table == nullptr) {
     printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    has_err = true;
     return;
   }
   table->add_pk(key);
 }
 
 void drop_pk(const std::string &table_name, const std::string &pk_name) {
-  auto db = ScapeFrontend::get()->get_current_db_manager();
-  if (db == nullptr) {
-    printf("ERROR: no database selected.\n");
-    has_err = true;
-    return;
-  }
+  CHECK_DB_EXISTS(db);
   auto table = db->get_table_manager(table_name);
   if (table == nullptr) {
     printf("ERROR: table %s doesn't exist.\n", table_name.data());
-    has_err = true;
     return;
   }
   if (table->get_primary_key() == nullptr) {
-    printf("!ERROR\ntable %s doesn't have a primary key.\n", table_name.data());
-    has_err = true;
+    Logger::tabulate({"!ERROR", "primary (0-1)"}, 2, 1);
     return;
   }
   if (pk_name != "" && pk_name != table->get_primary_key()->key_name) {
-    printf("!ERROR\nprimary key %s doesn't exist.\n", pk_name.data());
-    has_err = true;
+    printf("ERROR: pk %s doesn't exist.\n", pk_name.data());
     return;
   }
   table->drop_pk();
+}
+
+void add_fk(const std::string &table_name, std::shared_ptr<ForeignKey> key) {
+  CHECK_DB_EXISTS(db);
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s doesn't exist.\n", table_name.data());
+    return;
+  }
+  table->add_fk(key);
+}
+
+void drop_fk(const std::string &table_name, const std::string &fk_name) {
+  CHECK_DB_EXISTS(db);
+  auto table = db->get_table_manager(table_name);
+  if (table == nullptr) {
+    printf("ERROR: table %s doesn't exist.\n", table_name.data());
+    return;
+  }
+  table->drop_fk(fk_name);
 }
 
 } // namespace ScapeSQL

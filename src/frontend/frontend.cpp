@@ -14,7 +14,10 @@ namespace ch = std::chrono;
 
 std::shared_ptr<ScapeFrontend> ScapeFrontend::instance = nullptr;
 
-ScapeFrontend::ScapeFrontend() { global_manager = GlobalManager::get(); }
+ScapeFrontend::ScapeFrontend() {
+  global_manager = GlobalManager::get();
+  global_manager->deserialize();
+}
 
 void ScapeFrontend::parse(const std::string &stmt) {
   antlr4::ANTLRInputStream inputStream(stmt);

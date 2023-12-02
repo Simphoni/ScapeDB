@@ -42,7 +42,6 @@ public:
     }
     return instance;
   }
-  static void manual_cleanup() { instance = nullptr; }
 
   void parse(argparse::ArgumentParser &parser);
 };

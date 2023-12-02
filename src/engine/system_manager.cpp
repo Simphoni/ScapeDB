@@ -9,6 +9,7 @@
 #include <engine/system_manager.h>
 #include <storage/storage.h>
 #include <utils/config.h>
+#include <utils/logger.h>
 #include <utils/misc.h>
 
 namespace fs = std::filesystem;
@@ -29,8 +30,15 @@ GlobalManager::GlobalManager() {
     uint32_t db_count = accessor.read<uint32_t>();
     for (size_t i = 0; i < db_count; i++) {
       std::string db_name = accessor.read_str();
-      lookup[db_name] = DatabaseManager::build(db_name, true);
+      lookup[db_name] =
+          std::shared_ptr<DatabaseManager>(new DatabaseManager(db_name));
     }
+  }
+}
+
+void GlobalManager::deserialize() {
+  for (auto &[db_name, db] : lookup) {
+    db->deserialize();
   }
 }
 
@@ -47,7 +55,7 @@ GlobalManager::~GlobalManager() {
 void GlobalManager::create_db(const std::string &s) {
   if (lookup.contains(s))
     return;
-  lookup[s] = DatabaseManager::build(s, false);
+  lookup[s] = std::shared_ptr<DatabaseManager>(new DatabaseManager(s));
 }
 
 void GlobalManager::drop_db(const std::string &s) {
@@ -58,32 +66,34 @@ void GlobalManager::drop_db(const std::string &s) {
   lookup.erase(it);
 }
 
-DatabaseManager::DatabaseManager(const std::string &name, bool from_file) {
+DatabaseManager::DatabaseManager(const std::string &name) {
   db_name = name;
   db_dir = fs::path(Config::get()->dbs_dir) / db_name;
   ensure_directory(db_dir);
   db_meta = fs::path(db_dir) / ".meta";
   ensure_file(db_meta);
   file_manager = FileMapping::get();
-  if (from_file) {
-    int fd = FileMapping::get()->open_file(db_meta);
-    SequentialAccessor accessor(fd);
-    if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
-      accessor.reset(0);
-      accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
-      accessor.write<uint32_t>(0);
-      return;
-    }
-    int table_count = accessor.read<uint32_t>();
-    for (int i = 0; i < table_count; i++) {
-      std::string table_name = accessor.read_str();
-      auto tbl = std::shared_ptr<TableManager>(
-          new TableManager(db_dir, table_name, get_unified_id()));
-      lookup[table_name] = tbl;
-    }
-    for (auto &[_, tbl] : lookup) {
-      tbl->build_fk();
-    }
+}
+
+void DatabaseManager::deserialize() {
+  int fd = FileMapping::get()->open_file(db_meta);
+  SequentialAccessor accessor(fd);
+  if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
+    accessor.reset(0);
+    accessor.write<uint32_t>(Config::SCAPE_SIGNATURE);
+    accessor.write<uint32_t>(0);
+    return;
+  }
+  int table_count = accessor.read<uint32_t>();
+  for (int i = 0; i < table_count; i++) {
+    std::string table_name = accessor.read_str();
+    auto tbl = std::shared_ptr<TableManager>(
+        new TableManager(db_dir, table_name, get_unified_id()));
+    lookup[table_name] = tbl;
+    tbl->deserialize();
+  }
+  for (auto &[_, tbl] : lookup) {
+    tbl->build_fk();
   }
 }
 
@@ -140,6 +150,9 @@ TableManager::TableManager(const std::string &db_dir, const std::string &name,
   index_prefix = fs::path(db_dir) / (name + ".idx.");
   ensure_file(meta_file);
   ensure_file(data_file);
+}
+
+void TableManager::deserialize() {
   record_len = sizeof(bitmap_t);
   SequentialAccessor accessor(FileMapping::get()->open_file(meta_file));
   if (accessor.read<uint32_t>() != Config::SCAPE_SIGNATURE) {
@@ -219,20 +232,7 @@ TableManager::TableManager(const std::string &db_name,
   }
   auto db = GlobalManager::get()->get_db_manager(db_name);
   for (auto fk : foreign_keys) {
-    const std::string &ref_table_name = fk->ref_table_name;
-    auto ref_table = db->get_table_manager(ref_table_name);
-    if (ref_table == nullptr) {
-      printf("ERROR: ref table %s not found\n", ref_table_name.data());
-      has_err = true;
-      return;
-    }
-    fk->build(this, ref_table);
-    if (fk->ref_hash() != ref_table->get_primary_key()->local_hash()) {
-      printf("!ERROR: fk not referencing primary key.\n");
-      has_err = true;
-      return;
-    }
-    fk->index = ref_table->get_index(fk->ref_hash())->remap(fk->fields);
+    fk->build(this, db);
   }
 }
 
@@ -266,11 +266,7 @@ TableManager::~TableManager() {
 void TableManager::build_fk() {
   auto db = GlobalManager::get()->get_db_manager(db_name);
   for (auto fk : foreign_keys) {
-    const std::string &ref_table_name = fk->ref_table_name;
-    auto ref_table = db->get_table_manager(ref_table_name);
-    assert(ref_table != nullptr);
-    fk->build(this, ref_table);
-    fk->index = ref_table->get_index(fk->ref_hash())->remap(fk->fields);
+    fk->build(this, db);
   }
 }
 
@@ -283,8 +279,18 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
 }
 
 void TableManager::purge() {
+  if (primary_key != nullptr && primary_key->num_fk_refs) {
+    /// DEBUG
+    /// printf("%d\n", primary_key->num_fk_refs);
+    Logger::tabulate({"!ERROR", "foreign (pk refed)"}, 2, 1);
+    has_err = true;
+    return;
+  }
   FileMapping::get()->purge(meta_file);
   FileMapping::get()->purge(data_file);
+  for (auto &[hash, index] : index_manager) {
+    index->tree->purge();
+  }
   purged = true;
 }
 
@@ -301,42 +307,80 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
     if (has_val) {
       bitmap |= (1 << i);
     }
-    if (has_err) {
-      return;
-    }
   }
   *(bitmap_t *)ptr = bitmap;
-  if (check_insert_valid(ptr)) {
-    auto pos = record_manager->insert_record(ptr);
-    for (auto [_, index] : index_manager) {
-      index->insert_record(InsertCollection(pos.first, pos.second, ptr));
-    }
-  }
+  insert_record(ptr, true);
 }
 
 void TableManager::insert_record(uint8_t *ptr, bool enable_checking) {
-  if (enable_checking && !check_insert_valid(ptr)) {
+  if (enable_checking && !check_insert_validity(ptr)) {
     return;
   }
   auto pos = record_manager->insert_record(ptr);
   for (auto [_, index] : index_manager) {
-    index->insert_record(InsertCollection(pos.first, pos.second, ptr));
+    index->insert_record(KeyCollection(pos.first, pos.second, ptr));
+  }
+  for (auto fk : foreign_keys) {
+    auto refcnt = fk->index->get_refcount(ptr);
+    ++(*refcnt);
   }
 }
 
-bool TableManager::check_insert_valid(uint8_t *ptr) {
+void TableManager::erase_record(int pn, int sn, bool enable_checking) {
+  std::vector<uint8_t> temp_buf;
+  temp_buf.resize(record_len);
+  auto ptr = record_manager->get_record_ref(pn, sn);
+  memcpy(temp_buf.data(), ptr, record_len);
+  if (enable_checking && !check_erase_validity(ptr)) {
+    /// DEBUG
+    // puts("CAUGHT");
+    return;
+  }
+  for (auto [_, index] : index_manager) {
+    [[maybe_unused]] bool ret = index->tree->erase(
+        index->extractKeys(KeyCollection(pn, sn, temp_buf.data())));
+  }
+  for (auto fk : foreign_keys) {
+    auto refcnt = fk->index->get_refcount(temp_buf.data());
+    --(*refcnt);
+  }
+  record_manager->erase_record(pn, sn);
+}
+
+bool TableManager::check_insert_validity(uint8_t *ptr) {
   if (primary_key != nullptr) {
     auto index = primary_key->index;
-    auto data = index->extractKeys(InsertCollection(INT_MAX, INT_MAX, ptr));
+    auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
     auto ret = index->tree->bounded_match(data, Operator::LE);
     if (index->approx_eq(ret.keyptr, data.data())) {
-      printf("!ERROR\nduplicate key found.\n");
+      Logger::tabulate({"!ERROR", "duplicate (insert)"}, 2, 1);
       has_err = true;
       return false;
     }
   }
   for (auto fk : foreign_keys) {
-    /// TODO: check fk constraint
+    auto index = fk->index;
+    auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
+    auto ret = index->tree->bounded_match(data, Operator::LE);
+    if (!index->approx_eq(ret.keyptr, data.data())) {
+      Logger::tabulate({"!ERROR", "foreign (insert)"}, 2, 1);
+      has_err = true;
+      return false;
+    }
+  }
+  return true;
+}
+
+bool TableManager::check_erase_validity(uint8_t *ptr) {
+  if (primary_key != nullptr) {
+    auto refcnt = primary_key->index->get_refcount(ptr);
+    /// DEBUG
+    /// fprintf(stderr, "%d\n", *refcnt);
+    if ((*refcnt) != 0) {
+      Logger::tabulate({"!ERROR", "foreign (erase)"}, 2, 1);
+      has_err = true;
+      return false;
+    }
   }
   return true;
 }
@@ -357,17 +401,17 @@ void TableManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
   while (iter.get_next_valid_no_check()) {
     auto [pagenum, slotnum] = iter.get_locator();
     auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
-    auto keys =
-        index->extractKeys(InsertCollection(pagenum, slotnum, record_ref));
+    auto keys = index->extractKeys(KeyCollection(pagenum, slotnum, record_ref));
     if (enable_unique_check) {
       auto req = tree->bounded_match(keys, Operator::LE);
       if (index->approx_eq(req.keyptr, keys.data())) {
-        printf("!ERROR\nduplicate key found.\n");
+        Logger::tabulate({"!ERROR", "duplicate"}, 2, 1);
+        tree->purge();
         has_err = true;
         return;
       }
     }
-    index->insert_record(InsertCollection(pagenum, slotnum, record_ref));
+    index->insert_record(KeyCollection(pagenum, slotnum, record_ref));
   }
   index_manager[hash] = index;
 }
@@ -406,17 +450,76 @@ void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
       ok = ok && (primary_key->field_names[i] == pk->field_names[i]);
     }
     if (!ok) {
-      printf("!ERROR\ntrying to create multiple primary keys.\n");
+      Logger::tabulate({"!ERROR", "primary"}, 2, 1);
     }
   }
 }
 
 void TableManager::drop_pk() {
   if (primary_key->num_fk_refs) {
-    printf("!ERROR\npk is referenced by foreign key.\n");
+    Logger::tabulate({"!ERROR", "foreign (pk refed)"}, 2, 1);
     has_err = true;
     return;
   }
   drop_index(primary_key->local_hash());
   primary_key = nullptr;
+}
+
+void TableManager::add_fk(std::shared_ptr<ForeignKey> fk) {
+  if (fk->ref_table_name == table_name) {
+    printf("ERROR: creating a self referencing fk.\n");
+    return;
+  }
+  for (auto fk : foreign_keys) {
+    if (fk->key_name == fk->key_name) {
+      printf("ERROR: fks should have distinct names.\n");
+      return;
+    }
+  }
+  auto db = GlobalManager::get()->get_db_manager(db_name);
+  fk->build(this, db);
+  auto it = RecordIterator(record_manager, {}, fields, {});
+  while (it.get_next_valid_no_check()) {
+    auto [pn, sn] = it.get_locator();
+    auto ptr = record_manager->get_record_ref(pn, sn);
+    auto index = fk->index;
+    auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
+    auto ret = index->tree->bounded_match(data, Operator::LE);
+    if (!index->approx_eq(ret.keyptr, data.data())) {
+      Logger::tabulate({"!ERROR", "foreign"}, 2, 1);
+      has_err = true;
+      return;
+    }
+  }
+  it.reset_all();
+  while (it.get_next_valid_no_check()) {
+    auto [pn, sn] = it.get_locator();
+    auto ptr = record_manager->get_record_ref(pn, sn);
+    auto ref_cnt = fk->index->get_refcount(ptr);
+    ++(*ref_cnt);
+  }
+  foreign_keys.push_back(fk);
+}
+
+void TableManager::drop_fk(const std::string &fk_name) {
+  for (auto it = foreign_keys.begin(); it != foreign_keys.end(); ++it) {
+    if ((*it)->key_name == fk_name) {
+      auto fk = *it;
+      GlobalManager::get()
+          ->get_db_manager(db_name)
+          ->get_table_manager(fk->ref_table_name)
+          ->get_primary_key()
+          ->num_fk_refs--;
+      auto rec_it = RecordIterator(record_manager, {}, fk->fields, {});
+      while (rec_it.get_next_valid_no_check()) {
+        auto [pn, sn] = rec_it.get_locator();
+        auto ptr = record_manager->get_record_ref(pn, sn);
+        auto ref_cnt = fk->index->get_refcount(ptr);
+        --(*ref_cnt);
+      }
+      foreign_keys.erase(it);
+      return;
+    }
+  }
+  printf("ERROR: fk %s not found.\n", fk_name.data());
 }

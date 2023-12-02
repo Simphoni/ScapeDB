@@ -5,7 +5,7 @@
 key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields) {
   key_hash_t ret = 0;
   for (auto &it : fields) {
-    ret = (ret << 4) + (it->pers_index + 1);
+    ret |= 1 << it->pers_index;
   }
   return ret;
 }
@@ -45,11 +45,11 @@ void IndexMeta::serialize(SequentialAccessor &s) const {
   tree->serialize(s);
 }
 
-BPlusQueryResult IndexMeta::bounded_match(Operator op, InsertCollection data) {
+BPlusQueryResult IndexMeta::bounded_match(Operator op, KeyCollection data) {
   return tree->bounded_match(extractKeys(data), op);
 }
 
-std::vector<int> IndexMeta::extractKeys(const InsertCollection &data) {
+std::vector<int> IndexMeta::extractKeys(const KeyCollection &data) {
   int num_keys = key_offset.size();
   std::vector<int> key(num_keys + 2);
   for (int i = 0; i < num_keys; ++i)
@@ -59,6 +59,11 @@ std::vector<int> IndexMeta::extractKeys(const InsertCollection &data) {
   return key;
 }
 
-void IndexMeta::insert_record(InsertCollection data) {
+void IndexMeta::insert_record(KeyCollection data) {
   tree->insert(extractKeys(data), data.ptr);
+}
+
+uint32_t *IndexMeta::get_refcount(uint8_t *ptr) {
+  auto ret = bounded_match(Operator::LE, KeyCollection(INT_MAX, INT_MAX, ptr));
+  return (uint32_t *)(ret.dataptr + tree->get_record_len());
 }

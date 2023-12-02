@@ -139,7 +139,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
   const auto &header = planner->selector->header;
   const auto &field = planner->selector->columns;
   int ncol = header.size();
-  int nrow = 0;
+  [[maybe_unused]] int nrow = 0;
   /// make header
   for (int i = 0; i < ncol; i++) {
     printf("%s%c", header[i].data(), i == ncol - 1 ? '\n' : ',');
