@@ -130,6 +130,7 @@ public:
     return record_manager;
   }
   int get_record_len() const noexcept { return record_len; }
+  int get_record_num() const;
 
   /// setters - records
   bool check_insert_validity(uint8_t *ptr);

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 
@@ -10,13 +11,16 @@
 using IType = IntType::DType;
 using FType = FloatType::DType;
 
+inline bool cmp(std::shared_ptr<TableManager> p,
+                std::shared_ptr<TableManager> q) {
+  return p->get_record_num() < q->get_record_num();
+}
+
 void QueryPlanner::generate_plan() {
+  std::sort(tables.begin(), tables.end(), cmp);
   for (auto tbl : tables) {
     direct_iterators.push_back(
         tbl->make_iterator(constraints, selector->columns));
-    // direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
-    //     new RecordIterator(tbl->get_record_manager(), constraints,
-    //                        tbl->get_fields(), selector->columns)));
   }
   auto tmp_it = direct_iterators[0];
   for (size_t i = 1; i < direct_iterators.size(); ++i) {

@@ -290,6 +290,8 @@ std::shared_ptr<Field> TableManager::get_field(const std::string &s) const {
   return it->second;
 }
 
+int TableManager::get_record_num() const { return record_manager->n_records; }
+
 void TableManager::purge() {
   if (primary_key != nullptr && primary_key->num_fk_refs) {
     Logger::tabulate({"!ERROR", "foreign (pk refed)"}, 2, 1);
@@ -565,7 +567,8 @@ std::shared_ptr<Iterator> TableManager::make_iterator(
   }
   for (auto con : cons_) {
     auto cov = std::dynamic_pointer_cast<ColumnOpValueConstraint>(con);
-    if (cov == nullptr || !first_key_offsets.contains(cov->column_offset)) {
+    if (cov == nullptr || !cov->live_in(table_id) ||
+        !first_key_offsets.contains(cov->column_offset)) {
       continue;
     }
     auto index = first_key_offsets[cov->column_offset];

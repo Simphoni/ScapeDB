@@ -43,6 +43,7 @@ RecordManager::RecordManager(SequentialAccessor &accessor) {
   fd = FileMapping::get()->open_file(filename);
   n_pages = accessor.read<uint32_t>();
   ptr_available = accessor.read<uint32_t>();
+  n_records = accessor.read<uint32_t>();
   record_len = accessor.read<uint32_t>();
   records_per_page = accessor.read<uint32_t>();
   headmask_size = (records_per_page + 63) / 64;
@@ -53,6 +54,7 @@ void RecordManager::serialize(SequentialAccessor &accessor) {
   accessor.write_str(filename);
   accessor.write<uint32_t>(n_pages);
   accessor.write<uint32_t>(ptr_available);
+  accessor.write<uint32_t>(n_records);
   accessor.write<uint32_t>(record_len);
   accessor.write<uint32_t>(records_per_page);
 }
@@ -87,6 +89,7 @@ std::pair<int, int> RecordManager::insert_record(const uint8_t *ptr) {
     *(int *)current_page = -1;
   }
   memcpy(current_page + header_len + slotid * record_len, ptr, record_len);
+  ++n_records;
   return std::make_pair(pageid, slotid);
 }
 
@@ -99,5 +102,6 @@ void RecordManager::erase_record(int pageid, int slotid) {
     *(int *)current_page = ptr_available;
     ptr_available = pageid;
   }
+  --n_records;
   headmask->unset(slotid);
 }

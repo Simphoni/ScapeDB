@@ -66,6 +66,7 @@ private:
   /// needs persistent storage
   int n_pages;
   int ptr_available;
+  int n_records;
 
   uint8_t *current_page;
   std::shared_ptr<FixedBitmap> headmask;
