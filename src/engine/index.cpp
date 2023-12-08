@@ -4,8 +4,8 @@
 
 key_hash_t keysHash(const std::vector<std::shared_ptr<Field>> &fields) {
   key_hash_t ret = 0;
-  for (auto &it : fields) {
-    ret |= 1 << it->pers_index;
+  for (auto it : fields) {
+    ret = ret << 4 | (it->pers_index + 1);
   }
   return ret;
 }
@@ -45,8 +45,8 @@ void IndexMeta::serialize(SequentialAccessor &s) const {
   tree->serialize(s);
 }
 
-BPlusQueryResult IndexMeta::bounded_match(Operator op, KeyCollection data) {
-  return tree->bounded_match(extractKeys(data), op);
+BPlusQueryResult IndexMeta::le_match(KeyCollection data) {
+  return tree->le_match(extractKeys(data));
 }
 
 std::vector<int> IndexMeta::extractKeys(const KeyCollection &data) {
@@ -64,7 +64,7 @@ void IndexMeta::insert_record(KeyCollection data) {
 }
 
 uint32_t *IndexMeta::get_refcount(uint8_t *ptr) {
-  auto ret = bounded_match(Operator::LE, KeyCollection(INT_MAX, INT_MAX, ptr));
+  auto ret = le_match(KeyCollection(INT_MAX, INT_MAX, ptr));
   PagedBuffer::get()->mark_dirty(ret.dataptr);
   return (uint32_t *)(ret.dataptr + tree->get_record_len());
 }

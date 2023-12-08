@@ -13,7 +13,7 @@ const int QUERY_MAX_BLOCK = 8 << 20; /// 8MB
 const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
 
 /// Iterator class
-/// a iterator reads/gathers records from a "source" (aka "all") and buffers
+/// an iterator reads/gathers records from a "source" (aka "all") and buffers
 /// them in a temporary file.
 /// it provides two levels of iteration:
 /// - block level
@@ -23,14 +23,13 @@ const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
 class Iterator {
 protected:
   IteratorType type;
-  bool source_ended;
+  bool source_ended{false};
 
   int fd_dst;
   std::set<unified_id_t> table_ids;
   std::vector<std::shared_ptr<Field>> fields_dst;
   int record_len, record_per_page;
   int n_records{0}, dst_iter{0};
-  uint8_t *current_dst_page;
 
 public:
   inline int max_record_capacity() const {
@@ -64,7 +63,6 @@ public:
 class RecordIterator : public Iterator {
 private:
   int fd_src, pagenum_src, slotnum_src;
-  uint8_t *current_src_page;
   std::shared_ptr<RecordManager> record_manager;
   std::vector<std::shared_ptr<Field>> fields_src;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
@@ -87,6 +85,30 @@ public:
   int fill_next_block() override;
   /// for delete/set operatione
   std::pair<int, int> get_locator();
+};
+
+class IndexIterator : public Iterator {
+private:
+  std::shared_ptr<BPlusTree> tree;
+  int fd_src, pagenum_src, slotnum_src;
+  int pagenum_init, slotnum_init;
+  int leaf_data_len, leaf_max, key_num;
+  bool store_full_data;
+  int lbound, rbound;
+  std::vector<std::shared_ptr<Field>> fields_src;
+  std::vector<std::shared_ptr<WhereConstraint>> constraints;
+
+public:
+  /// [lbound, rbound)
+  IndexIterator(std::shared_ptr<IndexMeta> index, int lbound, int rbound,
+                const std::vector<std::shared_ptr<WhereConstraint>> &cons,
+                const std::vector<std::shared_ptr<Field>> &fields_src,
+                const std::vector<std::shared_ptr<Field>> &fields_dst);
+  // todo: write this
+  // ~IndexIterator();
+  bool get_next_valid() override;
+  void reset_all() override;
+  int fill_next_block() override;
 };
 
 class JoinIterator : public Iterator {

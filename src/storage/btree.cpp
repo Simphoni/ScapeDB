@@ -392,7 +392,7 @@ bool BPlusTree::erase(const std::vector<int> &key) {
 }
 
 std::optional<BPlusQueryResult>
-BPlusTree::precise_match(const std::vector<int> &key) const {
+BPlusTree::eq_match(const std::vector<int> &key) const {
   int pagenum_cur = pagenum_root;
   while (true) {
     uint8_t *slice =
@@ -414,31 +414,7 @@ BPlusTree::precise_match(const std::vector<int> &key) const {
   }
 }
 
-BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
-                                          Operator op) const {
-  auto key = key_;
-  if (op == Operator::LT) {
-    op = LE;
-    for (int i = key_num - 1; i >= 0; i--) {
-      if (key[i] != INT_MIN) {
-        --key[i];
-        break;
-      } else {
-        key[i] = INT_MAX;
-      }
-    }
-  } else if (op == Operator::GT) {
-    op = GE;
-    for (int i = key_num - 1; i >= 0; i--) {
-      if (key[i] != INT_MAX) {
-        ++key[i];
-        break;
-      } else {
-        key[i] = INT_MIN;
-      }
-    }
-  }
-  assert(op == Operator::LE || op == Operator::GE);
+BPlusQueryResult BPlusTree::le_match(const std::vector<int> &key) const {
   int pagenum_cur = pagenum_root;
   while (true) {
     uint8_t *slice =
@@ -447,7 +423,7 @@ BPlusQueryResult BPlusTree::bounded_match(const std::vector<int> &key_,
     int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
     int *data = keys + key_num * get_cap(meta->type);
     if (meta->type == NodeType::LEAF) {
-      int idx = bin_search(keys, meta->size, key, op);
+      int idx = bin_search(keys, meta->size, key, Operator::LE);
       if (idx < meta->size) {
         return (BPlusQueryResult){pagenum_cur, idx, keys + idx * key_num,
                                   ((uint8_t *)data) + leaf_data_len * idx};

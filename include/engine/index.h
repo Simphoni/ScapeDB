@@ -44,6 +44,6 @@ struct IndexMeta {
 
   std::vector<int> extractKeys(const KeyCollection &data);
   void insert_record(KeyCollection data);
-  BPlusQueryResult bounded_match(Operator op, KeyCollection data);
+  BPlusQueryResult le_match(KeyCollection data);
   uint32_t *get_refcount(uint8_t *ptr);
 };

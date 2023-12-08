@@ -148,4 +148,8 @@ public:
   void drop_fk(const std::string &fk_name);
   void add_explicit_index(std::shared_ptr<ExplicitIndexKey> idx);
   void drop_explicit_index(const std::string &idx_name);
+
+  std::shared_ptr<Iterator>
+  make_iterator(const std::vector<std::shared_ptr<WhereConstraint>> &cons,
+                const std::vector<std::shared_ptr<Field>> &fields_dst);
 };

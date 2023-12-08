@@ -66,12 +66,6 @@ private:
     keys = (int *)(slice + sizeof(BPlusNodeMeta));
     data = (uint8_t *)(keys + key_num * get_cap(meta->type));
   }
-  void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
-                          uint8_t *&data, NodeType type) const {
-    meta = (BPlusNodeMeta *)slice;
-    keys = (int *)(slice + sizeof(BPlusNodeMeta));
-    data = (uint8_t *)(keys + key_num * get_cap(type));
-  }
   int compare_key(const int *a, const int *b) const;
   /// find largest index i such that a[i] </<= key.
   /// find smallest index i such that a[i] >/>= key.
@@ -97,16 +91,21 @@ public:
   BPlusTree(const std::string &filename, int key_num, int record_len);
   BPlusTree(SequentialAccessor &accessor);
 
+  void prepare_from_slice(uint8_t *slice, BPlusNodeMeta *&meta, int *&keys,
+                          uint8_t *&data, NodeType type) const {
+    meta = (BPlusNodeMeta *)slice;
+    keys = (int *)(slice + sizeof(BPlusNodeMeta));
+    data = (uint8_t *)(keys + key_num * get_cap(type));
+  }
+
   inline int get_fd() const { return fd; }
   inline int get_cap(NodeType type) const {
     return type == INTERNAL ? internal_max : leaf_max;
   }
   inline int get_record_len() { return leaf_data_len - 4; }
 
-  std::optional<BPlusQueryResult>
-  precise_match(const std::vector<int> &key) const;
-  BPlusQueryResult bounded_match(const std::vector<int> &key,
-                                 Operator op) const;
+  std::optional<BPlusQueryResult> eq_match(const std::vector<int> &key) const;
+  BPlusQueryResult le_match(const std::vector<int> &key) const;
 
   void insert(const std::vector<int> &key, const uint8_t *record);
   bool erase(const std::vector<int> &key);

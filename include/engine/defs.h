@@ -41,6 +41,7 @@ class QueryPlanner;
 /// iterator.h
 class Iterator;
 class RecordIterator;
+class IndexIterator;
 class JoinIterator;
 
 typedef uint32_t unified_id_t;

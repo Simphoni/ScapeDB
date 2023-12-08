@@ -42,8 +42,8 @@ struct WhereConstraint {
 struct ColumnOpValueConstraint : public WhereConstraint {
   std::function<bool(const char *)> cmp;
   /// reserved for BPlusTree, which supports only integer
-  int column_index, column_offset;
-  int value;
+  int column_offset, value;
+  Operator op;
 
   ColumnOpValueConstraint(std::shared_ptr<Field> field, Operator op,
                           std::any val);

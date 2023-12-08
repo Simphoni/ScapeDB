@@ -12,9 +12,11 @@ using FType = FloatType::DType;
 
 void QueryPlanner::generate_plan() {
   for (auto tbl : tables) {
-    direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
-        new RecordIterator(tbl->get_record_manager(), constraints,
-                           tbl->get_fields(), selector->columns)));
+    direct_iterators.push_back(
+        tbl->make_iterator(constraints, selector->columns));
+    // direct_iterators.emplace_back(std::shared_ptr<RecordIterator>(
+    //     new RecordIterator(tbl->get_record_manager(), constraints,
+    //                        tbl->get_fields(), selector->columns)));
   }
   auto tmp_it = direct_iterators[0];
   for (size_t i = 1; i < direct_iterators.size(); ++i) {
@@ -72,8 +74,8 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   table_id = field->table_id;
   int col_idx = field->pers_index;
   int col_off = field->pers_offset;
-  this->column_index = col_idx;
   this->column_offset = col_off;
+  this->op = Operator::NE;
   if (field->dtype_meta->type == DataType::INT) {
     if (val.type() != typeid(IType)) {
       printf("ERROR: where clause type mismatch (expect INT)\n");
@@ -82,6 +84,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     }
     int value = std::any_cast<IType>(std::move(val));
     this->value = value;
+    this->op = op;
     switch (op) {
     case Operator::EQ:
       cmp = [=](const char *record) {

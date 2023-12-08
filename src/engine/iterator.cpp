@@ -27,7 +27,7 @@ RecordIterator::RecordIterator(
   source_ended = false;
   it = valid_records.begin();
 
-  unified_id_t table_id = fields_src_[0]->table_id;
+  unified_id_t table_id = fields_src[0]->table_id;
   table_ids.insert(table_id);
   std::set<unified_id_t> field_ids_src, field_ids_dst;
   for (auto &field : fields_src) {
@@ -75,7 +75,7 @@ bool RecordIterator::get_next_valid_no_check() {
   if (it == valid_records.end()) {
     pagenum_src++;
     while (pagenum_src < record_manager->n_pages) {
-      current_src_page =
+      uint8_t *current_src_page =
           PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
       FixedBitmap bits(record_manager->headmask_size,
                        (uint64_t *)(current_src_page + BITMAP_START_OFFSET));
@@ -134,9 +134,8 @@ int RecordIterator::fill_next_block() {
 
     int dst_slot = i % record_per_page;
     /// A bug was fixed here, always read before buffering
-    uint8_t *current_dst_page = PagedBuffer::get()->read_file_rd(
+    uint8_t *current_dst_page = PagedBuffer::get()->read_file_rdwr(
         std::make_pair(fd_dst, i / record_per_page));
-    PagedBuffer::get()->mark_dirty(current_dst_page);
     auto ptr_dst = current_dst_page + dst_slot * record_len;
     int offset_dst = sizeof(bitmap_t);
     bitmap_t dst_bitmap = 0;
@@ -167,6 +166,156 @@ void RecordIterator::reset_all() {
 
 std::pair<int, int> RecordIterator::get_locator() {
   return std::make_pair(pagenum_src, slotnum_src);
+}
+
+IndexIterator::IndexIterator(
+    std::shared_ptr<IndexMeta> index, int lbound_, int rbound_,
+    const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
+    const std::vector<std::shared_ptr<Field>> &fields_src_,
+    const std::vector<std::shared_ptr<Field>> &fields_dst_)
+    : lbound(lbound_), rbound(rbound_) {
+  fields_src = fields_src_;
+  tree = index->tree;
+  fd_src = tree->get_fd();
+  fd_dst = FileMapping::get()->create_temp_file();
+  leaf_data_len = tree->get_record_len() + 4; /// always keep refcount
+  leaf_max = tree->get_cap(NodeType::LEAF);
+  key_num = index->key_offset.size() + 2;
+  store_full_data = index->store_full_data;
+
+  unified_id_t table_id = fields_src_[0]->table_id;
+  table_ids.insert(table_id);
+  std::set<unified_id_t> field_ids_src, field_ids_dst;
+  for (auto &field : fields_src) {
+    assert(field->table_id == table_id);
+    field_ids_src.insert(field->field_id);
+  }
+
+  for (auto field : fields_dst_) {
+    field_ids_dst.insert(field->field_id);
+  }
+  for (auto constraint : cons_) {
+    if (constraint->live_in(table_id)) {
+      constraints.push_back(constraint);
+    } else {
+      auto col_comp =
+          std::dynamic_pointer_cast<ColumnOpColumnConstraint>(constraint);
+      if (col_comp == nullptr)
+        continue;
+      if (field_ids_src.contains(col_comp->field_id1) !=
+          field_ids_src.contains(col_comp->field_id2)) {
+        field_ids_dst.insert(col_comp->field_id1);
+        field_ids_dst.insert(col_comp->field_id2);
+      }
+    }
+  }
+
+  record_len = sizeof(bitmap_t);
+  for (auto field : fields_src_) {
+    if (field_ids_dst.contains(field->field_id)) {
+      fields_dst.push_back(field);
+      record_len += field->get_size();
+    }
+  }
+  record_per_page = Config::PAGE_SIZE / record_len;
+
+  std::vector<int> key(key_num, INT_MIN);
+  key[0] = lbound;
+  auto pos = tree->le_match(key);
+  pagenum_src = pos.pagenum;
+  pagenum_init = pos.pagenum;
+  slotnum_src = pos.slotnum;
+  slotnum_init = pos.slotnum;
+}
+
+void IndexIterator::reset_all() {
+  pagenum_src = pagenum_init;
+  slotnum_src = slotnum_init;
+  dst_iter = n_records = 0;
+  source_ended = false;
+}
+
+bool IndexIterator::get_next_valid() {
+  auto slice =
+      PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
+  BPlusNodeMeta *meta;
+  int *keys;
+  uint8_t *data;
+  tree->prepare_from_slice(slice, meta, keys, data, NodeType::LEAF);
+  int node_size = meta->size;
+  bool match = false;
+  do {
+    ++slotnum_src;
+    if (slotnum_src >= node_size) {
+      pagenum_src = meta->right_sibling;
+      slotnum_src = 0;
+      if (pagenum_src == -1) {
+        assert(false);
+        source_ended = true;
+        return false;
+      }
+      slice =
+          PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
+      node_size = ((BPlusNodeMeta *)slice)->size;
+      tree->prepare_from_slice(slice, meta, keys, data, NodeType::LEAF);
+    }
+    if (keys[slotnum_src * key_num] >= rbound) {
+      source_ended = true;
+      return false;
+    }
+
+    match = true;
+    for (auto constraint : constraints) {
+      if (!constraint->check(data + slotnum_src * leaf_data_len,
+                             data + slotnum_src * leaf_data_len)) {
+        match = false;
+        break;
+      }
+    }
+  } while (!match);
+  return true;
+}
+
+int IndexIterator::fill_next_block() {
+  n_records = 0;
+  dst_iter = 0;
+  if (source_ended)
+    return 0;
+
+  for (int i = 0; i < record_per_page * QUERY_MAX_PAGES; ++i) {
+    if (!get_next_valid() || source_ended) {
+      break;
+    }
+    const uint8_t *ptr_src =
+        PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
+    // if (store_fu5ll_data) {
+    ptr_src += sizeof(BPlusNodeMeta) + leaf_max * key_num * sizeof(int) +
+               slotnum_src * leaf_data_len;
+    // } else {
+    // TODO: impl this
+    // }
+    bitmap_t bitmap_src = *(const bitmap_t *)ptr_src;
+
+    int slot_dst = i % record_per_page;
+    uint8_t *current_dst_page = PagedBuffer::get()->read_file_rdwr(
+        std::make_pair(fd_dst, i / record_per_page));
+    auto ptr_dst = current_dst_page + slot_dst * record_len;
+    int offset_dst = sizeof(bitmap_t);
+    bitmap_t bitmap_dst = 0;
+    for (size_t j = 0; j < fields_dst.size(); ++j) {
+      int index = fields_dst[j]->pers_index;
+      int length = fields_dst[j]->get_size();
+      if ((bitmap_src >> index) & 1) {
+        bitmap_dst |= 1 << j;
+        memcpy(ptr_dst + offset_dst, ptr_src + fields_dst[j]->pers_offset,
+               length);
+      }
+      offset_dst += length;
+    }
+    *(bitmap_t *)ptr_dst = bitmap_dst;
+    n_records = i + 1;
+  }
+  return n_records;
 }
 
 /// NOTE: maintain original and new [index, offset] of fields

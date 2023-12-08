@@ -5,6 +5,7 @@
 #include <engine/field.h>
 #include <engine/index.h>
 #include <engine/iterator.h>
+#include <engine/query.h>
 #include <engine/record.h>
 #include <engine/system.h>
 #include <storage/storage.h>
@@ -358,7 +359,7 @@ bool TableManager::check_insert_validity(uint8_t *ptr) {
   if (primary_key != nullptr) {
     auto index = primary_key->index;
     auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
-    auto ret = index->tree->bounded_match(data, Operator::LE);
+    auto ret = index->tree->le_match(data);
     if (index->approx_eq(ret.keyptr, data.data())) {
       Logger::tabulate({"!ERROR", "duplicate (insert)"}, 2, 1);
       has_err = true;
@@ -368,7 +369,7 @@ bool TableManager::check_insert_validity(uint8_t *ptr) {
   for (auto fk : foreign_keys) {
     auto index = fk->index;
     auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
-    auto ret = index->tree->bounded_match(data, Operator::LE);
+    auto ret = index->tree->le_match(data);
     if (!index->approx_eq(ret.keyptr, data.data())) {
       Logger::tabulate({"!ERROR", "foreign (insert)"}, 2, 1);
       has_err = true;
@@ -410,7 +411,7 @@ void TableManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
     auto record_ref = record_manager->get_record_ref(pagenum, slotnum);
     auto keys = index->extractKeys(KeyCollection(pagenum, slotnum, record_ref));
     if (enable_unique_check) {
-      auto req = tree->bounded_match(keys, Operator::LE);
+      auto req = tree->le_match(keys);
       if (index->approx_eq(req.keyptr, keys.data())) {
         Logger::tabulate({"!ERROR", "duplicate"}, 2, 1);
         tree->purge();
@@ -491,7 +492,7 @@ void TableManager::add_fk(std::shared_ptr<ForeignKey> fk) {
     auto ptr = record_manager->get_record_ref(pn, sn);
     auto index = fk->index;
     auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
-    auto ret = index->tree->bounded_match(data, Operator::LE);
+    auto ret = index->tree->le_match(data);
     if (!index->approx_eq(ret.keyptr, data.data())) {
       Logger::tabulate({"!ERROR", "foreign"}, 2, 1);
       has_err = true;
@@ -553,4 +554,45 @@ void TableManager::drop_explicit_index(const std::string &idx_name) {
     }
   }
   printf("ERROR: explicit index %s not found.\n", idx_name.data());
+}
+
+std::shared_ptr<Iterator> TableManager::make_iterator(
+    const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
+    const std::vector<std::shared_ptr<Field>> &fields_dst) {
+  std::map<int, std::shared_ptr<IndexMeta>> first_key_offsets;
+  for (auto [_, index] : index_manager) {
+    first_key_offsets[index->key_offset[0]] = index;
+  }
+  for (auto con : cons_) {
+    auto cov = std::dynamic_pointer_cast<ColumnOpValueConstraint>(con);
+    if (cov == nullptr || !first_key_offsets.contains(cov->column_offset)) {
+      continue;
+    }
+    auto index = first_key_offsets[cov->column_offset];
+    int lbound = INT_MIN, rbound = INT_MAX;
+    switch (cov->op) {
+    case Operator::EQ:
+      lbound = cov->value;
+      rbound = cov->value + 1;
+      break;
+    case Operator::GE:
+      lbound = cov->value;
+      break;
+    case Operator::GT:
+      lbound = cov->value + 1;
+      break;
+    case Operator::LE:
+      rbound = cov->value + 1;
+      break;
+    case Operator::LT:
+      rbound = cov->value;
+      break;
+    default:
+      continue;
+    }
+    return std::shared_ptr<IndexIterator>(
+        new IndexIterator(index, lbound, rbound, cons_, fields, fields_dst));
+  }
+  return std::shared_ptr<RecordIterator>(
+      new RecordIterator(record_manager, cons_, fields, fields_dst));
 }

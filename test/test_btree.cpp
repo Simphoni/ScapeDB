@@ -33,7 +33,7 @@ TEST(btree, RootUpdate) {
     btree->insert(key[i], rec[i]);
   }
   for (int i = 0; i < n; i++) {
-    auto ret = btree->precise_match(key[i]);
+    auto ret = btree->eq_match(key[i]);
     ASSERT_TRUE(ret.has_value());
     uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
@@ -62,7 +62,7 @@ TEST(btree, LeafSplit_InternalInsert) {
     btree->insert(key[i], rec[i]);
   }
   for (int i = 0; i < n; i++) {
-    auto ret = btree->precise_match(key[i]);
+    auto ret = btree->eq_match(key[i]);
     ASSERT_TRUE(ret.has_value());
     uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
@@ -93,7 +93,7 @@ TEST(btree, InternalSplit) {
     btree->insert(key[i], rec[i]);
   }
   for (int i = 0; i < n; i++) {
-    auto ret = btree->precise_match(key[i]);
+    auto ret = btree->eq_match(key[i]);
     ASSERT_TRUE(ret.has_value());
     uint8_t *p = ret.value().dataptr;
     for (int j = 0; j < record_len; j++) {
@@ -126,7 +126,7 @@ TEST(btree, Erase) {
   for (int q = 0; q < n * 10; q++) {
     int i = rand() % n;
     if (inserted[i]) {
-      auto ret = btree->precise_match(key[i]);
+      auto ret = btree->eq_match(key[i]);
       ASSERT_TRUE(ret.has_value());
       uint8_t *p = ret.value().dataptr;
       for (int j = 0; j < record_len; j++) {
@@ -135,7 +135,7 @@ TEST(btree, Erase) {
       ASSERT_TRUE(btree->erase(key[i]));
       inserted[i] = false;
     } else {
-      auto ret = btree->precise_match(key[i]);
+      auto ret = btree->eq_match(key[i]);
       ASSERT_FALSE(ret.has_value());
       btree->insert(key[i], rec[i]);
       inserted[i] = true;
