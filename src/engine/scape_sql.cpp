@@ -178,13 +178,34 @@ void update_set_table(
   while (record_iter->get_next_valid()) {
     auto [pn, sn] = record_iter->get_locator();
     auto record_ref = record_manager->get_record_ref(pn, sn);
-    if (!table->check_erase_validity(record_ref))
-      break;
-    memcpy(buf_o.data(), record_ref, record_len);
     memcpy(buf_i.data(), record_ref, record_len);
-    table->erase_record(pn, sn, false);
-    for (auto op : set_variables)
+    memcpy(buf_o.data(), record_ref, record_len);
+    for (auto op : set_variables) {
       op.set((char *)buf_o.data());
+    }
+    if (table->get_primary_key() != nullptr) {
+      auto pk_index = table->get_primary_key()->index;
+      const auto &k_offset = pk_index->key_offset;
+      bool identical = true;
+      for (auto off : k_offset) {
+        if (*(int *)(buf_i.data() + off) != *(int *)(buf_o.data() + off)) {
+          identical = false;
+          break;
+        }
+      }
+      if (identical && table->check_insert_validity_foreign(buf_o.data())) {
+        uint32_t refcnt = *pk_index->get_refcount(buf_i.data());
+        table->erase_record(pn, sn, false);
+        table->insert_record(buf_o.data(), false);
+        *pk_index->get_refcount(buf_o.data()) = refcnt;
+        continue;
+      }
+    }
+    if (has_err)
+      break;
+    if (!table->check_erase_validity(buf_i.data()))
+      break;
+    table->erase_record(pn, sn, false);
     if (!table->check_insert_validity(buf_o.data())) {
       table->insert_record(buf_i.data(), false);
       break;

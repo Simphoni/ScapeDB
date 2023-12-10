@@ -284,7 +284,7 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 /// Identifier type_ ('NOT' Null)? ('DEFAULT' value)?
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   std::shared_ptr<Field> field =
-      std::make_shared<Field>(ctx->Identifier()->getText(), get_unified_id());
+      std::make_shared<Field>(ctx->identifier()->getText(), get_unified_id());
   field->dtype_meta = DataTypeBase::build(ctx->type_()->getText());
   if (ctx->Null() != nullptr) {
     field->notnull = true;
@@ -384,9 +384,9 @@ std::any ScapeVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
   }
   std::shared_ptr<TableManager> table = tables_stack.back()[0];
   std::vector<SetVariable> set_vars;
-  int num = ctx->Identifier().size();
+  int num = ctx->identifier().size();
   for (int i = 0; i < num; i++) {
-    std::string col_name = ctx->Identifier(i)->getText();
+    std::string col_name = ctx->identifier(i)->getText();
     auto field = table->get_field(col_name);
     if (field == nullptr) {
       has_err = true;
@@ -468,12 +468,11 @@ std::any ScapeVisitor::visitIdentifiers(SQLParser::IdentifiersContext *ctx) {
   return ret;
 }
 
-/// (Identifier '.')? Identifier
+/// (identifier '.')? identifier
 std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
-  std::string col = ctx->getText();
-  auto dot = col.find('.');
   const auto &selected_tables = tables_stack.back();
-  if (dot == std::string::npos) {
+  if (ctx->identifier().size() == 1) {
+    std::string col = ctx->identifier(0)->getText();
     int num = 0;
     for (auto table : selected_tables) {
       num += (table->get_field(col) != nullptr);
@@ -494,20 +493,21 @@ std::any ScapeVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
       }
     }
   } else {
-    std::string tab_name = col.substr(0, dot);
-    std::string col_name = col.substr(dot + 1);
+    std::string tab_name = ctx->identifier(0)->getText();
+    std::string col_name = ctx->identifier(1)->getText();
     for (auto table : selected_tables) {
       if (table->get_name() == tab_name) {
         auto field = table->get_field(col_name);
         if (field == nullptr) {
-          printf("ERROR: cannot find column for %s\n", col.data());
+          printf("ERROR: cannot find column for %s.%s\n", tab_name.data(),
+                 col_name.data());
           has_err = true;
           return std::any();
         }
         return field;
       }
     }
-    printf("ERROR: cannot find table for %s\n", col.data());
+    printf("ERROR: cannot find table %s\n", tab_name.data());
   }
   has_err = true;
   return std::any();
@@ -562,6 +562,18 @@ std::any ScapeVisitor::visitWhere_operator_expression(
         new ColumnOpColumnConstraint(field, op, other));
   }
   has_err = true;
+  return std::any();
+}
+
+/// column 'IS' (Not)? Null
+std::any ScapeVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  return std::shared_ptr<WhereConstraint>(
+      new ColumnNullConstraint(field, ctx->Not() != nullptr));
   return std::any();
 }
 
@@ -649,7 +661,10 @@ ScapeVisitor::visitAlter_add_index(SQLParser::Alter_add_indexContext *ctx) {
   return std::any();
 }
 
+/// 'ALTER' 'TABLE' Identifier 'DROP' 'INDEX' Identifier
 std::any
 ScapeVisitor::visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) {
+  ScapeSQL::drop_index(ctx->Identifier(0)->getText(),
+                       ctx->Identifier(1)->getText());
   return std::any();
 }

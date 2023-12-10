@@ -314,7 +314,7 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
   uint8_t *ptr_cur = ptr + sizeof(bitmap_t);
   bitmap_t bitmap = 0;
   int has_val = 0;
-  for (size_t i = 0; i < fields.size(); ++i) {
+  for (size_t i = 0; i < fields.size() && !has_err; ++i) {
     ptr_cur = fields[i]->dtype_meta->write_buf(ptr_cur, values[i], has_val);
     if (has_val) {
       bitmap |= (1 << i);
@@ -357,7 +357,7 @@ void TableManager::erase_record(int pn, int sn, bool enable_checking) {
   record_manager->erase_record(pn, sn);
 }
 
-bool TableManager::check_insert_validity(uint8_t *ptr) {
+bool TableManager::check_insert_validity_primary(uint8_t *ptr) {
   if (primary_key != nullptr) {
     auto index = primary_key->index;
     auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
@@ -368,6 +368,10 @@ bool TableManager::check_insert_validity(uint8_t *ptr) {
       return false;
     }
   }
+  return true;
+}
+
+bool TableManager::check_insert_validity_foreign(uint8_t *ptr) {
   for (auto fk : foreign_keys) {
     auto index = fk->index;
     auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
@@ -379,6 +383,11 @@ bool TableManager::check_insert_validity(uint8_t *ptr) {
     }
   }
   return true;
+}
+
+bool TableManager::check_insert_validity(uint8_t *ptr) {
+  return check_insert_validity_primary(ptr) &&
+         check_insert_validity_foreign(ptr);
 }
 
 bool TableManager::check_erase_validity(uint8_t *ptr) {

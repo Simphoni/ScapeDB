@@ -134,6 +134,8 @@ public:
 
   /// setters - records
   bool check_insert_validity(uint8_t *ptr);
+  bool check_insert_validity_foreign(uint8_t *ptr);
+  bool check_insert_validity_primary(uint8_t *ptr);
   bool check_erase_validity(uint8_t *ptr);
   void insert_record(const std::vector<std::any> &values);
   void insert_record(uint8_t *ptr, bool enable_checking);

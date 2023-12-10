@@ -12,7 +12,10 @@ Average: 'AVG';
 Max: 'MAX';
 Min: 'MIN';
 Sum: 'SUM';
+Not: 'NOT';
 Null: 'NULL';
+Date: 'DATE';
+Data: 'DATA';
 
 Identifier: [a-zA-Z_] [a-zA-Z_0-9]*;
 Integer: ('-')? [0-9]+;
@@ -20,6 +23,11 @@ String:  '\'' (~'\'')* '\'';
 Float: ('-')? [0-9]+ '.' [0-9]*;
 Whitespace: [ \t\n\r]+ -> skip;
 Annotation: '-' '-' (~';')+;
+
+identifier
+    : Identifier
+    | Date
+    | Data;
 
 program
     : statement* EOF
@@ -72,7 +80,7 @@ field_list
     ;
 
 field
-    : Identifier type_ ('NOT' Null)? ('DEFAULT' value)?                                               # normal_field
+    : identifier type_ ('NOT' Null)? ('DEFAULT' value)?                                               # normal_field
     | 'PRIMARY' 'KEY' (Identifier)? '(' identifiers ')'                                               # primary_key_field
     | 'FOREIGN' 'KEY' (Identifier)? '(' identifiers ')' 'REFERENCES' Identifier '(' identifiers ')'   # foreign_key_field
     ;
@@ -110,14 +118,14 @@ where_and_clause
 where_clause
     : column operator_ expression            # where_operator_expression
     | column operator_ '(' select_table ')'  # where_operator_select
-    | column 'IS' ('NOT')? Null              # where_null
+    | column 'IS' (Not)? Null              # where_null
     | column 'IN' value_list                 # where_in_list
     | column 'IN' '(' select_table ')'       # where_in_select
     | column 'LIKE' String                   # where_like_string
     ;
 
 column
-    : (Identifier '.')? Identifier
+    : (identifier '.')? identifier
     ;
 
 expression
@@ -126,7 +134,7 @@ expression
     ;
 
 set_clause
-    : Identifier EqualOrAssign value (',' Identifier EqualOrAssign value)*
+    : identifier EqualOrAssign value (',' identifier EqualOrAssign value)*
     ;
 
 selectors

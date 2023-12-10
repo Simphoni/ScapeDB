@@ -73,6 +73,13 @@ struct ColumnOpColumnConstraint : public WhereConstraint {
   void build(int col_idx, int col_off, int col_idx_o, int col_off_o);
 };
 
+struct ColumnNullConstraint : public WhereConstraint {
+  std::function<bool(const char *)> chk;
+
+  ColumnNullConstraint(std::shared_ptr<Field> field, bool field_not_null);
+  bool check(const uint8_t *record, const uint8_t *other) const override;
+};
+
 struct SetVariable {
   std::function<void(char *)> set;
   SetVariable(std::shared_ptr<Field> field, std::any &&value);

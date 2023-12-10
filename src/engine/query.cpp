@@ -7,6 +7,7 @@
 #include <engine/query.h>
 #include <engine/system.h>
 #include <storage/storage.h>
+#include <utils/logger.h>
 
 using IType = IntType::DType;
 using FType = FloatType::DType;
@@ -474,13 +475,27 @@ void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
   }
 }
 
+ColumnNullConstraint::ColumnNullConstraint(std::shared_ptr<Field> field,
+                                           bool field_not_null) {
+  table_id = field->table_id;
+  int col_idx = field->pers_index;
+  chk = [=](const char *record) {
+    return null_check(record, col_idx) == field_not_null;
+  };
+}
+
+bool ColumnNullConstraint::check(const uint8_t *record,
+                                 const uint8_t *other) const {
+  return chk((const char *)record);
+}
+
 SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
   /// default value should not be used here
   int col_idx = field->pers_index;
   int col_off = field->pers_offset;
   if (!value_.has_value()) {
     if (field->notnull) {
-      printf("ERROR: attempt to violate Not Null constraint\n");
+      Logger::tabulate({"!ERROR", "violating not null constraint"}, 2, 1);
       has_err = true;
       return;
     }

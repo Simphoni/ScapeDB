@@ -7,6 +7,7 @@
 #include <engine/index.h>
 #include <engine/system.h>
 #include <storage/storage.h>
+#include <utils/logger.h>
 
 uint64_t cast_f2i(double x) { return *reinterpret_cast<uint64_t *>(&x); }
 double cast_i2f(uint64_t x) { return *reinterpret_cast<double *>(&x); }
@@ -62,7 +63,7 @@ uint8_t *IntType::write_buf(uint8_t *ptr, std::any val, int &comment) {
     *(DType *)ptr = value;
   } else {
     if (notnull) {
-      printf("ERROR: not null constraint\n");
+      Logger::tabulate({"!ERROR", "violating not null constraint"}, 2, 1);
       has_err = true;
     }
     comment = 0;
@@ -113,7 +114,7 @@ uint8_t *FloatType::write_buf(uint8_t *ptr, std::any val, int &comment) {
     *(DType *)ptr = value;
   } else {
     if (notnull) {
-      printf("ERROR: not null constraint\n");
+      Logger::tabulate({"!ERROR", "violating not null constraint"}, 2, 1);
       has_err = true;
     }
     comment = 0;
@@ -167,7 +168,7 @@ uint8_t *VarcharType::write_buf(uint8_t *ptr, std::any val, int &comment) {
     memcpy(ptr, value.data(), value.length());
   } else {
     if (notnull) {
-      printf("ERROR: not null constraint\n");
+      Logger::tabulate({"!ERROR", "violating not null constraint"}, 2, 1);
       has_err = true;
     }
     comment = 0;
