@@ -12,6 +12,7 @@ Average: 'AVG';
 Max: 'MAX';
 Min: 'MIN';
 Sum: 'SUM';
+
 Not: 'NOT';
 Null: 'NULL';
 Date: 'DATE';
@@ -54,7 +55,7 @@ table_statement
     : 'CREATE' 'TABLE' Identifier '(' field_list ')'                                                # create_table
     | 'DROP' 'TABLE' Identifier                                                                     # drop_table
     | 'DESC' Identifier                                                                             # describe_table
-    | 'LOAD' 'DATA' 'INFILE' String 'INTO' 'TABLE' Identifier 'FIELDS' 'TERMINATED' 'BY' String     # load_table
+    | 'LOAD' Data 'INFILE' String 'INTO' 'TABLE' Identifier 'FIELDS' 'TERMINATED' 'BY' String     # load_table
     | 'INSERT' 'INTO' Identifier 'VALUES' value_lists                                               # insert_into_table
     | 'DELETE' 'FROM' Identifier ('WHERE' where_and_clause)?                                        # delete_from_table
     | 'UPDATE' Identifier 'SET' set_clause 'WHERE' where_and_clause                                 # update_table
@@ -89,6 +90,7 @@ type_
     : 'INT'
     | 'VARCHAR' '(' Integer ')'
     | 'FLOAT'
+    | Date
     ;
 
 order

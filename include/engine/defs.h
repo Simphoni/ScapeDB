@@ -22,6 +22,7 @@ struct DataTypeBase;
 struct IntType;
 struct FloatType;
 struct VarcharType;
+struct DateType;
 struct KeyBase;
 struct NormalHolder;
 struct PrimaryKey;
@@ -56,6 +57,7 @@ enum DataType : uint8_t {
   INT = 1,
   FLOAT,
   VARCHAR,
+  DATE,
 };
 
 std::string datatype2str(DataType type);

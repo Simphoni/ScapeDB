@@ -21,6 +21,8 @@ std::shared_ptr<DataTypeBase> DataTypeBase::build(const std::string &s) {
     auto ret = std::make_shared<VarcharType>();
     ret->mxlen = std::stoi(std::string(s.begin() + 8, s.end() - 1));
     return ret;
+  } else if (s == "DATE") {
+    return std::make_shared<DateType>();
   } else {
     assert(false);
   }
@@ -28,12 +30,14 @@ std::shared_ptr<DataTypeBase> DataTypeBase::build(const std::string &s) {
 
 std::shared_ptr<DataTypeBase> DataTypeBase::build(DataType type) {
   switch (type) {
-  case INT:
+  case DataType::INT:
     return std::make_shared<IntType>();
-  case FLOAT:
+  case DataType::FLOAT:
     return std::make_shared<FloatType>();
-  case VARCHAR:
+  case DataType::VARCHAR:
     return std::make_shared<VarcharType>();
+  case DataType::DATE:
+    return std::make_shared<DateType>();
   default:
     assert(false);
   }
@@ -72,7 +76,7 @@ uint8_t *IntType::write_buf(uint8_t *ptr, std::any val, int &comment) {
 }
 
 void IntType::serialize(SequentialAccessor &s) const {
-  s.write_byte(INT);
+  s.write_byte(DataType::INT);
   s.write_byte(has_default_val);
   if (has_default_val) {
     s.write<uint32_t>(value);
@@ -123,7 +127,7 @@ uint8_t *FloatType::write_buf(uint8_t *ptr, std::any val, int &comment) {
 }
 
 void FloatType::serialize(SequentialAccessor &s) const {
-  s.write_byte(FLOAT);
+  s.write_byte(DataType::FLOAT);
   s.write_byte(has_default_val);
   if (has_default_val) {
     s.write<uint64_t>(cast_f2i(value));
@@ -177,7 +181,7 @@ uint8_t *VarcharType::write_buf(uint8_t *ptr, std::any val, int &comment) {
 }
 
 void VarcharType::serialize(SequentialAccessor &s) const {
-  s.write_byte(VARCHAR);
+  s.write_byte(DataType::VARCHAR);
   s.write<uint32_t>(mxlen);
   s.write_byte(has_default_val);
   if (has_default_val) {
@@ -190,6 +194,65 @@ void VarcharType::deserialize(SequentialAccessor &s) {
   has_default_val = s.read_byte();
   if (has_default_val) {
     value = s.read_str();
+  }
+}
+
+/// Field DataType: DATE
+
+void DateType::set_default_value(std::any val) {
+  if (val.type() == typeid(std::string)) {
+    auto ret = parse_date(std::any_cast<std::string>(std::move(val)));
+    if (ret.has_value()) {
+      value = ret.value();
+    } else {
+      Logger::tabulate({"!ERROR", "invalid date format"}, 2, 1);
+      has_err = true;
+    }
+  } else {
+    printf("ERROR: type mismatch (should be DATE)\n");
+    has_err = true;
+  }
+}
+
+uint8_t *DateType::write_buf(uint8_t *ptr, std::any val, int &comment) {
+  comment = 1;
+  if (val.has_value()) {
+    if (val.type() == typeid(std::string)) {
+      auto ret = parse_date(std::any_cast<std::string>(std::move(val)));
+      if (ret.has_value()) {
+        (*(DType *)ptr) = ret.value();
+      } else {
+        Logger::tabulate({"!ERROR", "invalid date format"}, 2, 1);
+        has_err = true;
+      }
+    } else {
+      printf("ERROR: type mismatch (should be VARCHAR)\n");
+      has_err = true;
+    }
+  } else if (has_default_val) {
+    (*(DType *)ptr) = value;
+  } else {
+    if (notnull) {
+      Logger::tabulate({"!ERROR", "violating not null constraint"}, 2, 1);
+      has_err = true;
+    }
+    comment = 0;
+  }
+  return ptr + get_size();
+}
+
+void DateType::serialize(SequentialAccessor &s) const {
+  s.write_byte(DataType::DATE);
+  s.write_byte(has_default_val);
+  if (has_default_val) {
+    s.write<uint32_t>(value);
+  }
+}
+
+void DateType::deserialize(SequentialAccessor &s) {
+  has_default_val = s.read_byte();
+  if (has_default_val) {
+    value = s.read<uint32_t>();
   }
 }
 

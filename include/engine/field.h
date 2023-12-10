@@ -86,6 +86,60 @@ struct VarcharType : public DataTypeBase {
   void deserialize(SequentialAccessor &s) override;
 };
 
+struct DateType : public DataTypeBase {
+  static const int date_str_len = 10;
+  using DType = int;
+  DType value;
+
+  DateType() { type = DataType::DATE; }
+  static std::optional<int> parse_date(const std::string &s) {
+    if (s.size() != date_str_len)
+      return std::nullopt;
+    for (int i = 0; i < date_str_len; i++) {
+      if (i == 4 || i == 7) {
+        if (s[i] != '-')
+          return std::nullopt;
+      } else if (!isdigit(s[i])) {
+        return std::nullopt;
+      }
+    }
+    int year = std::stoi(s.substr(0, 4));
+    int month = std::stoi(s.substr(5, 2));
+    int day = std::stoi(s.substr(8, 2));
+    int comb = year * 10000 + month * 100 + day;
+    if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31)
+      return std::nullopt;
+    bool isLeap = ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0);
+    if (month == 2) {
+      return day <= 28 + isLeap ? std::make_optional(comb) : std::nullopt;
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+      return day <= 30 ? std::make_optional(comb) : std::nullopt;
+    }
+    return std::make_optional(comb);
+  }
+  void set_default_value(const std::string &s) override {
+    has_default_val = true;
+    auto ret = parse_date(s);
+    if (!ret.has_value()) {
+      printf("Invalid date format: %s\n", s.data());
+      has_err = true;
+    }
+    value = ret.value();
+  }
+  std::string type_str() override { return "DATE"; }
+  std::string val_str() override {
+    static char buf[16];
+    sprintf(buf, "%d-%02d-%02d", value / 10000, value / 100 % 100, value % 100);
+    return std::string(buf, buf + date_str_len);
+  }
+  int get_size() const override { return sizeof(DType); }
+  void set_default_value(std::any val) override;
+  uint8_t *write_buf(uint8_t *ptr, std::any val, int &comment) override;
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+};
+
 struct KeyBase {
   KeyType type;
   bool random_name{false};

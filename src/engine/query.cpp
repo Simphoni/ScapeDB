@@ -81,13 +81,31 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   int col_off = field->pers_offset;
   this->column_offset = col_off;
   this->op = Operator::NE;
-  if (field->dtype_meta->type == DataType::INT) {
-    if (val.type() != typeid(IType)) {
-      printf("ERROR: where clause type mismatch (expect INT)\n");
-      has_err = true;
-      return;
+  if (field->dtype_meta->type == DataType::INT ||
+      field->dtype_meta->type == DataType::DATE) {
+    int value = 0;
+    if (field->dtype_meta->type == DataType::INT) {
+      if (val.type() != typeid(IType)) {
+        printf("ERROR: where clause type mismatch (expect INT)\n");
+        has_err = true;
+        return;
+      }
+      value = std::any_cast<IType>(std::move(val));
+    } else {
+      if (val.type() != typeid(std::string)) {
+        printf("ERROR: where clause type mismatch (expect DATE)\n");
+        has_err = true;
+        return;
+      }
+      auto ret =
+          DateType::parse_date(std::any_cast<std::string>(std::move(val)));
+      if (!ret.has_value()) {
+        Logger::tabulate({"!ERROR", "invalid date format"}, 2, 1);
+        has_err = true;
+        return;
+      }
+      value = ret.value();
     }
-    int value = std::any_cast<IType>(std::move(val));
     this->value = value;
     this->op = op;
     switch (op) {
@@ -284,7 +302,7 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
 
 void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
                                      int col_off_o) {
-  if (dtype == DataType::INT) {
+  if (dtype == DataType::INT || dtype == DataType::DATE) {
     switch (optype) {
     case Operator::EQ:
       cmp = [=](const char *record, const char *other) {
@@ -546,6 +564,27 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       memset(record + col_off, 0, mxlen);
       memcpy(record + col_off, s.data(), s.size());
       record[col_off + s.size()] = 0;
+    };
+  } else if (field->dtype_meta->type == DataType::DATE) {
+    int val = 0;
+    if (value_.type() == typeid(std::string)) {
+      auto ret =
+          DateType::parse_date(std::any_cast<std::string>(std::move(value_)));
+      if (ret.has_value()) {
+        val = ret.value();
+      } else {
+        Logger::tabulate({"!ERROR", "invalid date format"}, 2, 1);
+        has_err = true;
+        return;
+      }
+    } else {
+      printf("ERROR: where clause type mismatch (expect INT)\n");
+      has_err = true;
+      return;
+    }
+    set = [=](char *record) {
+      *(bitmap_t *)record |= 1 << col_idx;
+      *(int *)(record + col_off) = val;
     };
   }
 }

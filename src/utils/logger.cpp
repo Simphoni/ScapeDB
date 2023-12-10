@@ -61,6 +61,8 @@ int fmt_width(std::shared_ptr<Field> f) {
     return 16 + 3;
   case DataType::VARCHAR:
     return f->get_size();
+  case DataType::DATE:
+    return 11;
   default:
     assert(false);
   }
@@ -119,6 +121,11 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
         case DataType::VARCHAR:
           print((const char *)(p), maxlen[i]);
           break;
+        case DataType::DATE: {
+          auto date = *(DateType::DType *)(p);
+          printf("%04d-%02d-%02d", date / 10000, date / 100 % 100, date % 100);
+          break;
+        }
         default:
           assert(false);
         }
@@ -161,6 +168,11 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
         case DataType::VARCHAR:
           printf("%s", (char *)(p));
           break;
+        case DataType::DATE: {
+          auto date = *(DateType::DType *)(p);
+          printf("%04d-%02d-%02d", date / 10000, date / 100 % 100, date % 100);
+          break;
+        }
         default:
           assert(false);
         }
