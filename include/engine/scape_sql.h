@@ -31,5 +31,6 @@ void drop_fk(const std::string &table_name, const std::string &fk_name);
 void add_index(const std::string &table_name,
                std::shared_ptr<ExplicitIndexKey> key);
 void drop_index(const std::string &table_name, const std::string &index_name);
+void add_unique(const std::string &table_name, std::shared_ptr<UniqueKey> key);
 
 } // namespace ScapeSQL

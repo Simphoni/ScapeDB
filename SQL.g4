@@ -15,8 +15,6 @@ Sum: 'SUM';
 
 Not: 'NOT';
 Null: 'NULL';
-Date: 'DATE';
-Data: 'DATA';
 
 Identifier: [a-zA-Z_] [a-zA-Z_0-9]*;
 Integer: ('-')? [0-9]+;
@@ -27,8 +25,8 @@ Annotation: '-' '-' (~';')+;
 
 identifier
     : Identifier
-    | Date
-    | Data;
+    | 'DATE'
+    | 'DATA';
 
 program
     : statement* EOF
@@ -55,7 +53,7 @@ table_statement
     : 'CREATE' 'TABLE' Identifier '(' field_list ')'                                                # create_table
     | 'DROP' 'TABLE' Identifier                                                                     # drop_table
     | 'DESC' Identifier                                                                             # describe_table
-    | 'LOAD' Data 'INFILE' String 'INTO' 'TABLE' Identifier 'FIELDS' 'TERMINATED' 'BY' String     # load_table
+    | 'LOAD' 'DATA' 'INFILE' String 'INTO' 'TABLE' Identifier 'FIELDS' 'TERMINATED' 'BY' String     # load_table
     | 'INSERT' 'INTO' Identifier 'VALUES' value_lists                                               # insert_into_table
     | 'DELETE' 'FROM' Identifier ('WHERE' where_and_clause)?                                        # delete_from_table
     | 'UPDATE' Identifier 'SET' set_clause 'WHERE' where_and_clause                                 # update_table
@@ -73,7 +71,7 @@ alter_statement
     | 'ALTER' 'TABLE' Identifier 'DROP' 'FOREIGN' 'KEY' Identifier                                          # alter_table_drop_foreign_key
     | 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'PRIMARY' 'KEY' '(' identifiers ')'    # alter_table_add_pk
     | 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'FOREIGN' 'KEY' '(' identifiers ')' 'REFERENCES' Identifier '(' identifiers ')'  # alter_table_add_foreign_key
-    | 'ALTER' 'TABLE' Identifier 'ADD' 'UNIQUE' (Identifier)? '(' identifiers ')'                           # alter_table_add_unique
+    | 'ALTER' 'TABLE' Identifier 'ADD' 'CONSTRAINT' 'UNIQUE' (Identifier)? '(' identifiers ')'                           # alter_table_add_unique
     ;
 
 field_list
@@ -90,7 +88,7 @@ type_
     : 'INT'
     | 'VARCHAR' '(' Integer ')'
     | 'FLOAT'
-    | Date
+    | 'DATE'
     ;
 
 order

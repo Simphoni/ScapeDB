@@ -194,10 +194,18 @@ void update_set_table(
         }
       }
       if (identical && table->check_insert_validity_foreign(buf_o.data())) {
+        if (has_err)
+          break;
         uint32_t refcnt = *pk_index->get_refcount(buf_i.data());
         table->erase_record(pn, sn, false);
-        table->insert_record(buf_o.data(), false);
-        *pk_index->get_refcount(buf_o.data()) = refcnt;
+        auto ptr = buf_o.data();
+        if (!table->check_insert_validity_unique(buf_o.data())) {
+          ptr = buf_i.data();
+        }
+        table->insert_record(ptr, false);
+        *pk_index->get_refcount(ptr) = refcnt;
+        if (has_err)
+          break;
         continue;
       }
     }
@@ -358,7 +366,13 @@ void add_index(const std::string &table_name,
 void drop_index(const std::string &table_name, const std::string &index_name) {
   CHECK_DB_EXISTS(db);
   CHECK_TABLE_EXISTS(db, table_name, table);
-  table->drop_explicit_index(index_name);
+  table->drop_index(index_name);
+}
+
+void add_unique(const std::string &table_name, std::shared_ptr<UniqueKey> key) {
+  CHECK_DB_EXISTS(db);
+  CHECK_TABLE_EXISTS(db, table_name, table);
+  table->add_unique(key);
 }
 
 } // namespace ScapeSQL

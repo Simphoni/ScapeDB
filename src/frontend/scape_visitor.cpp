@@ -668,3 +668,19 @@ ScapeVisitor::visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) {
                        ctx->Identifier(1)->getText());
   return std::any();
 }
+
+std::any ScapeVisitor::visitAlter_table_add_unique(
+    SQLParser::Alter_table_add_uniqueContext *ctx) {
+  auto exp = std::make_shared<UniqueKey>();
+  if (ctx->Identifier().size() > 1) {
+    exp->random_name = false;
+    exp->key_name = ctx->Identifier(1)->getText();
+  } else {
+    exp->random_name = true;
+    exp->key_name = generate_random_string();
+  }
+  exp->field_names =
+      std::any_cast<std::vector<std::string>>(ctx->identifiers()->accept(this));
+  ScapeSQL::add_unique(ctx->Identifier(0)->getText(), exp);
+  return std::any();
+}

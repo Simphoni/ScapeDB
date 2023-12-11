@@ -185,6 +185,13 @@ struct ExplicitIndexKey : public KeyBase {
   void build(const TableManager *table);
 };
 
+struct UniqueKey : public KeyBase {
+  UniqueKey() { type = KeyType::UNIQUE; }
+  void serialize(SequentialAccessor &s) const override;
+  void deserialize(SequentialAccessor &s) override;
+  void build(const TableManager *table);
+};
+
 struct Field {
   std::string field_name;
   std::shared_ptr<DataTypeBase> dtype_meta;

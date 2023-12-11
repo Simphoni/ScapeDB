@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <engine/defs.h>
@@ -88,9 +89,11 @@ private:
   std::vector<std::shared_ptr<Field>> fields;
   std::unordered_map<std::string, std::shared_ptr<Field>> lookup;
   /// constraints
+  std::unordered_set<std::string> used_names;
   std::shared_ptr<PrimaryKey> primary_key;
   std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
   std::vector<std::shared_ptr<ExplicitIndexKey>> explicit_index_keys;
+  std::vector<std::shared_ptr<UniqueKey>> unique_keys;
 
   int table_id;
   int record_len;
@@ -134,8 +137,9 @@ public:
 
   /// setters - records
   bool check_insert_validity(uint8_t *ptr);
-  bool check_insert_validity_foreign(uint8_t *ptr);
   bool check_insert_validity_primary(uint8_t *ptr);
+  bool check_insert_validity_unique(uint8_t *ptr);
+  bool check_insert_validity_foreign(uint8_t *ptr);
   bool check_erase_validity(uint8_t *ptr);
   void insert_record(const std::vector<std::any> &values);
   void insert_record(uint8_t *ptr, bool enable_checking);
@@ -150,7 +154,9 @@ public:
   void add_fk(std::shared_ptr<ForeignKey> fk);
   void drop_fk(const std::string &fk_name);
   void add_explicit_index(std::shared_ptr<ExplicitIndexKey> idx);
-  void drop_explicit_index(const std::string &idx_name);
+  void drop_index(const std::string &idx_name);
+  void add_unique(std::shared_ptr<UniqueKey> uk);
+  void drop_unique(const std::string &uk_name);
 
   std::shared_ptr<Iterator>
   make_iterator(const std::vector<std::shared_ptr<WhereConstraint>> &cons,

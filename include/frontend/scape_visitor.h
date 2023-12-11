@@ -106,4 +106,7 @@ public:
 
   std::any
   visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) override;
+
+  std::any visitAlter_table_add_unique(
+      SQLParser::Alter_table_add_uniqueContext *ctx) override;
 };

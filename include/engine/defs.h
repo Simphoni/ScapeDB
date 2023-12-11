@@ -24,10 +24,10 @@ struct FloatType;
 struct VarcharType;
 struct DateType;
 struct KeyBase;
-struct NormalHolder;
 struct PrimaryKey;
 struct ForeignKey;
 struct ExplicitIndexKey;
+struct UniqueKey;
 struct Field;
 
 /// query.h
@@ -66,6 +66,7 @@ enum KeyType : uint8_t {
   PRIMARY = 1,
   FOREIGN,
   EXPLICIT_INDEX,
+  UNIQUE,
 };
 
 std::string keytype2str(KeyType type);

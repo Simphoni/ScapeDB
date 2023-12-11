@@ -374,6 +374,20 @@ bool TableManager::check_insert_validity_primary(uint8_t *ptr) {
   return true;
 }
 
+bool TableManager::check_insert_validity_unique(uint8_t *ptr) {
+  for (auto uk : unique_keys) {
+    auto index = uk->index;
+    auto data = index->extractKeys(KeyCollection(INT_MAX, INT_MAX, ptr));
+    auto ret = index->tree->le_match(data);
+    if (index->approx_eq(ret.keyptr, data.data())) {
+      Logger::tabulate({"!ERROR", "duplicate (insert)"}, 2, 1);
+      has_err = true;
+      return false;
+    }
+  }
+  return true;
+}
+
 bool TableManager::check_insert_validity_foreign(uint8_t *ptr) {
   for (auto fk : foreign_keys) {
     auto index = fk->index;
@@ -390,6 +404,7 @@ bool TableManager::check_insert_validity_foreign(uint8_t *ptr) {
 
 bool TableManager::check_insert_validity(uint8_t *ptr) {
   return check_insert_validity_primary(ptr) &&
+         check_insert_validity_unique(ptr) &&
          check_insert_validity_foreign(ptr);
 }
 
@@ -413,6 +428,12 @@ void TableManager::add_index(const std::vector<std::shared_ptr<Field>> &fields,
   auto it = index_manager.find(hash);
   if (it != index_manager.end()) {
     it->second->refcount++;
+    if (enable_unique_check) {
+      if (!it->second->tree->leaf_unique_check()) {
+        Logger::tabulate({"!ERROR", "duplicate"}, 2, 1);
+        has_err = true;
+      }
+    }
     return;
   }
   std::string filename = index_prefix + std::to_string(hash);
@@ -453,13 +474,14 @@ void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
   if (primary_key == nullptr) {
     pk->build(this);
     add_index(pk->fields, true, true);
+    if (has_err)
+      return;
     pk->index = get_index(pk->local_hash());
-    if (pk->index != nullptr) {
-      primary_key = pk;
-      for (auto field : pk->fields) {
-        field->notnull = true;
-      }
+    primary_key = pk;
+    for (auto field : pk->fields) {
+      field->notnull = true;
     }
+    used_names.insert(pk->key_name);
   } else {
     bool ok = true;
     if (primary_key->key_name != pk->key_name) {
@@ -478,12 +500,16 @@ void TableManager::add_pk(std::shared_ptr<PrimaryKey> pk) {
 }
 
 void TableManager::drop_pk() {
+  if (primary_key == nullptr) {
+    printf("ERROR: no primary key in table %s.\n", table_name.data());
+    return;
+  }
   if (primary_key->num_fk_refs) {
-    Logger::tabulate({"!ERROR", "foreign (pk refed)"}, 2, 1);
-    has_err = true;
+    Logger::tabulate({"!ERROR", "foreign (drop referenced pk)"}, 2, 1);
     return;
   }
   drop_index(primary_key->local_hash());
+  used_names.erase(primary_key->key_name);
   primary_key = nullptr;
 }
 
@@ -492,11 +518,9 @@ void TableManager::add_fk(std::shared_ptr<ForeignKey> fk) {
     printf("ERROR: creating a self referencing fk.\n");
     return;
   }
-  for (auto fk : foreign_keys) {
-    if (fk->key_name == fk->key_name) {
-      printf("ERROR: fks should have distinct names.\n");
-      return;
-    }
+  if (used_names.contains(fk->key_name)) {
+    printf("ERROR: identifier %s already in use.\n", fk->key_name.data());
+    return;
   }
   auto db = GlobalManager::get()->get_db_manager(db_name);
   fk->build(this, db);
@@ -520,6 +544,7 @@ void TableManager::add_fk(std::shared_ptr<ForeignKey> fk) {
     auto refcnt = fk->index->get_refcount(ptr);
     ++(*refcnt);
   }
+  used_names.insert(fk->key_name);
   foreign_keys.push_back(fk);
 }
 
@@ -539,6 +564,7 @@ void TableManager::drop_fk(const std::string &fk_name) {
         auto refcnt = fk->index->get_refcount(ptr);
         --(*refcnt);
       }
+      used_names.erase(fk->key_name);
       foreign_keys.erase(it);
       return;
     }
@@ -547,27 +573,61 @@ void TableManager::drop_fk(const std::string &fk_name) {
 }
 
 void TableManager::add_explicit_index(std::shared_ptr<ExplicitIndexKey> idx) {
-  for (auto it : explicit_index_keys) {
-    if (it->key_name == idx->key_name) {
-      printf("ERROR: explicit indexes should have distinct names.\n");
-      return;
-    }
+  if (used_names.contains(idx->key_name)) {
+    printf("ERROR: identifier %s already in use.\n", idx->key_name.data());
+    return;
   }
   idx->build(this);
   add_index(idx->fields, true, false);
+  used_names.insert(idx->key_name);
   explicit_index_keys.push_back(idx);
 }
 
-void TableManager::drop_explicit_index(const std::string &idx_name) {
+void TableManager::drop_index(const std::string &idx_name) {
   for (auto it = explicit_index_keys.begin(); it != explicit_index_keys.end();
        ++it) {
     if ((*it)->key_name == idx_name) {
       drop_index((*it)->local_hash());
       explicit_index_keys.erase(it);
+      used_names.erase(idx_name);
       return;
     }
   }
-  printf("ERROR: explicit index %s not found.\n", idx_name.data());
+  for (auto it = unique_keys.begin(); it != unique_keys.end(); ++it) {
+    if ((*it)->key_name == idx_name) {
+      drop_index((*it)->local_hash());
+      unique_keys.erase(it);
+      used_names.erase(idx_name);
+      return;
+    }
+  }
+  printf("ERROR: index %s not found.\n", idx_name.data());
+}
+
+void TableManager::add_unique(std::shared_ptr<UniqueKey> uk) {
+  if (used_names.contains(uk->key_name)) {
+    printf("ERROR: identifier %s already in use.\n", uk->key_name.data());
+    return;
+  }
+  uk->build(this);
+  add_index(uk->fields, true, true);
+  if (has_err)
+    return;
+  uk->index = get_index(uk->local_hash());
+  used_names.insert(uk->key_name);
+  unique_keys.push_back(uk);
+}
+
+void TableManager::drop_unique(const std::string &uk_name) {
+  for (auto it = unique_keys.begin(); it != unique_keys.end(); ++it) {
+    if ((*it)->key_name == uk_name) {
+      drop_index((*it)->local_hash());
+      unique_keys.erase(it);
+      used_names.erase(uk_name);
+      return;
+    }
+  }
+  printf("ERROR: unique key %s not found.\n", uk_name.data());
 }
 
 std::shared_ptr<Iterator> TableManager::make_iterator(

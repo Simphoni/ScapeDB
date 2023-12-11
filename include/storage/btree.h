@@ -106,6 +106,7 @@ public:
 
   std::optional<BPlusQueryResult> eq_match(const std::vector<int> &key) const;
   BPlusQueryResult le_match(const std::vector<int> &key) const;
+  bool leaf_unique_check();
 
   void insert(const std::vector<int> &key, const uint8_t *record);
   bool erase(const std::vector<int> &key);
