@@ -129,6 +129,13 @@ public:
   const std::vector<std::shared_ptr<ForeignKey>> &get_foreign_keys() const {
     return foreign_keys;
   }
+  const std::vector<std::shared_ptr<ExplicitIndexKey>> &
+  get_explicit_index() const {
+    return explicit_index_keys;
+  }
+  const std::vector<std::shared_ptr<UniqueKey>> &get_unique_keys() const {
+    return unique_keys;
+  }
   std::shared_ptr<RecordManager> get_record_manager() const noexcept {
     return record_manager;
   }
