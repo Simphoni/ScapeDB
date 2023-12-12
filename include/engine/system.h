@@ -92,8 +92,8 @@ private:
   std::unordered_set<std::string> used_names;
   std::shared_ptr<PrimaryKey> primary_key;
   std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
-  std::vector<std::shared_ptr<ExplicitIndexKey>> explicit_index_keys;
   std::vector<std::shared_ptr<UniqueKey>> unique_keys;
+  std::vector<std::shared_ptr<ExplicitIndexKey>> explicit_index_keys;
 
   int table_id;
   int record_len;

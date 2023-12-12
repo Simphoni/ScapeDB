@@ -87,8 +87,9 @@ Aggregator str2aggr(const std::string &str);
 enum IteratorType : uint8_t {
   RECORD = 1,
   INDEX,
-  RESULT,
-  REORDER,
+  JOIN,
+  AGGERGATE,
+  ORDERBY,
 };
 
 enum ConstraintType : uint8_t {

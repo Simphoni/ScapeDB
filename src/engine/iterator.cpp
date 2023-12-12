@@ -17,7 +17,8 @@ RecordIterator::RecordIterator(
     std::shared_ptr<RecordManager> rec_,
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
-    const std::vector<std::shared_ptr<Field>> &fields_dst_) {
+    const std::vector<std::shared_ptr<Field>> &fields_dst_)
+    : Iterator(IteratorType::RECORD) {
   record_manager = rec_;
   fields_src = fields_src_;
   fd_src = record_manager->fd;
@@ -173,7 +174,7 @@ IndexIterator::IndexIterator(
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
     const std::vector<std::shared_ptr<Field>> &fields_dst_)
-    : lbound(lbound_), rbound(rbound_) {
+    : Iterator(IteratorType::INDEX), lbound(lbound_), rbound(rbound_) {
   fields_src = fields_src_;
   tree = index->tree;
   fd_src = tree->get_fd();
@@ -323,7 +324,7 @@ JoinIterator::JoinIterator(
     std::shared_ptr<Iterator> lhs_, std::shared_ptr<Iterator> rhs_,
     const std::vector<std::shared_ptr<WhereConstraint>> &cons,
     const std::vector<std::shared_ptr<Field>> &fields_dst_)
-    : lhs(lhs_), rhs(rhs_) {
+    : Iterator(IteratorType::JOIN), lhs(lhs_), rhs(rhs_) {
   source_ended = false;
   const auto &ltables = lhs->get_table_ids();
   const auto &rtables = rhs->get_table_ids();
@@ -488,4 +489,16 @@ void JoinIterator::reset_all() {
   rhs->reset_all();
   dst_iter = n_records = 0;
   source_ended = false;
+}
+
+AggregateIterator::AggregateIterator(std::shared_ptr<Iterator> iterator,
+                                     std::shared_ptr<Field> group_by_field_,
+                                     const std::vector<Aggregator> &aggrs_)
+    : Iterator(IteratorType::AGGERGATE), iter(iterator),
+      group_by_field(group_by_field_), aggrs(aggrs_) {
+  fd_dst = FileMapping::get()->create_temp_file();
+  fields_dst = iter->get_fields_dst();
+  record_len = iter->get_record_len();
+  record_per_page = Config::PAGE_SIZE / record_len;
+  table_ids = iter->get_table_ids();
 }

@@ -32,9 +32,11 @@ protected:
   int n_records{0}, dst_iter{0};
 
 public:
+  Iterator(IteratorType type) : type(type) {}
   inline int max_record_capacity() const {
     return record_per_page * QUERY_MAX_PAGES;
   }
+  int get_record_len() const { return record_len; }
   /// we process data in a per-block basis
   /// Iterator exposes fill_next_block() method that filters source data
   /// into a temporary buffer that will reside in memory during query
@@ -126,4 +128,16 @@ public:
   bool get_next_valid() override;
   void reset_all() override;
   int fill_next_block() override;
+};
+
+class AggregateIterator : public Iterator {
+private:
+  std::shared_ptr<Iterator> iter;
+  std::shared_ptr<Field> group_by_field;
+  std::vector<Aggregator> aggrs;
+
+public:
+  AggregateIterator(std::shared_ptr<Iterator> iterator,
+                    std::shared_ptr<Field> group_by_field,
+                    const std::vector<Aggregator> &aggrs);
 };
