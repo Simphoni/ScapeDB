@@ -41,9 +41,13 @@ class QueryPlanner;
 
 /// iterator.h
 class Iterator;
+class BlockIterator;
+class GatherIterator;
 class RecordIterator;
 class IndexIterator;
 class JoinIterator;
+class PermuteIterator;
+class AggregateIterator;
 
 typedef uint32_t unified_id_t;
 typedef uint16_t bitmap_t;
@@ -90,6 +94,7 @@ enum IteratorType : uint8_t {
   JOIN,
   AGGERGATE,
   ORDERBY,
+  PERMUTE,
 };
 
 enum ConstraintType : uint8_t {

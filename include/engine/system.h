@@ -165,7 +165,7 @@ public:
   void add_unique(std::shared_ptr<UniqueKey> uk);
   void drop_unique(const std::string &uk_name);
 
-  std::shared_ptr<Iterator>
+  std::shared_ptr<BlockIterator>
   make_iterator(const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                 const std::vector<std::shared_ptr<Field>> &fields_dst);
 };

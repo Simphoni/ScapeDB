@@ -13,6 +13,7 @@ struct Selector {
   std::vector<std::string> header;
   std::vector<std::shared_ptr<Field>> columns;
   std::vector<Aggregator> aggrs;
+  std::shared_ptr<Field> group_by_field;
   bool has_aggregate;
 
   Selector(std::vector<std::string> &&header,
@@ -87,7 +88,7 @@ struct SetVariable {
 
 class QueryPlanner {
 private:
-  std::vector<std::shared_ptr<Iterator>> direct_iterators;
+  std::vector<std::shared_ptr<BlockIterator>> direct_iterators;
   std::shared_ptr<Iterator> iter{nullptr};
   std::vector<uint8_t> buffer;
   std::vector<std::pair<int, int>> permute_info;
@@ -96,8 +97,6 @@ public:
   std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
-
-  /// engine
 
   void generate_plan();
   const uint8_t *get() const;

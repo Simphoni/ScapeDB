@@ -23,20 +23,30 @@ const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
 class Iterator {
 protected:
   IteratorType type;
-  bool source_ended{false};
-
-  int fd_dst;
-  std::set<unified_id_t> table_ids;
   std::vector<std::shared_ptr<Field>> fields_dst;
-  int record_len, record_per_page;
-  int n_records{0}, dst_iter{0};
+  int record_len;
+
+  Iterator(IteratorType type) : type(type) {}
 
 public:
-  Iterator(IteratorType type) : type(type) {}
-  inline int max_record_capacity() const {
-    return record_per_page * QUERY_MAX_PAGES;
+  const std::vector<std::shared_ptr<Field>> &get_fields_dst() const {
+    return fields_dst;
   }
-  int get_record_len() const { return record_len; }
+  virtual bool get_next_valid() = 0;
+  virtual const uint8_t *get() const = 0;
+};
+
+class BlockIterator : public Iterator {
+protected:
+  bool source_ended{false};
+  int fd_dst;
+  std::set<unified_id_t> table_ids;
+  int record_per_page;
+  int n_records{0}, dst_iter{0};
+
+  BlockIterator(IteratorType type) : Iterator(type) {}
+
+public:
   /// we process data in a per-block basis
   /// Iterator exposes fill_next_block() method that filters source data
   /// into a temporary buffer that will reside in memory during query
@@ -49,20 +59,16 @@ public:
   }
   bool block_end() const { return dst_iter == n_records; }
   bool all_end() const { return source_ended && dst_iter == n_records; }
-  const uint8_t *get() const;
   const std::set<unified_id_t> &get_table_ids() const { return table_ids; }
-  const std::vector<std::shared_ptr<Field>> &get_fields_dst() const {
-    return fields_dst;
-  }
 
-  virtual bool get_next_valid() = 0;
+  const uint8_t *get() const override;
   /// fill next block of records into buffer and reset block iter
   /// @return number of records filled
   virtual int fill_next_block() = 0;
   virtual void reset_all() = 0;
 };
 
-class RecordIterator : public Iterator {
+class RecordIterator : public BlockIterator {
 private:
   int fd_src, pagenum_src, slotnum_src;
   std::shared_ptr<RecordManager> record_manager;
@@ -89,7 +95,7 @@ public:
   std::pair<int, int> get_locator();
 };
 
-class IndexIterator : public Iterator {
+class IndexIterator : public BlockIterator {
 private:
   std::shared_ptr<BPlusTree> tree;
   int fd_src, pagenum_src, slotnum_src;
@@ -113,15 +119,16 @@ public:
   int fill_next_block() override;
 };
 
-class JoinIterator : public Iterator {
+class JoinIterator : public BlockIterator {
 private:
-  std::shared_ptr<Iterator> lhs, rhs;
+  std::shared_ptr<BlockIterator> lhs, rhs;
   std::vector<std::pair<int, int>> pos_dst_lhs, pos_dst_rhs;
   std::vector<std::shared_ptr<Field>> fields_dst_lhs, fields_dst_rhs;
   std::vector<std::shared_ptr<ColumnOpColumnConstraint>> constraints;
 
 public:
-  JoinIterator(std::shared_ptr<Iterator> lhs, std::shared_ptr<Iterator> rhs,
+  JoinIterator(std::shared_ptr<BlockIterator> lhs,
+               std::shared_ptr<BlockIterator> rhs,
                const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                const std::vector<std::shared_ptr<Field>> &fields_dst);
 
@@ -130,14 +137,50 @@ public:
   int fill_next_block() override;
 };
 
-class AggregateIterator : public Iterator {
+class PermuteIterator : public Iterator {
 private:
-  std::shared_ptr<Iterator> iter;
-  std::shared_ptr<Field> group_by_field;
-  std::vector<Aggregator> aggrs;
+  std::shared_ptr<BlockIterator> iter;
+  std::vector<std::pair<int, int>> permute_info;
+  std::vector<std::shared_ptr<Field>> fields_src;
+  std::vector<uint8_t> buffer;
 
 public:
-  AggregateIterator(std::shared_ptr<Iterator> iterator,
+  PermuteIterator(std::shared_ptr<BlockIterator> iter,
+                  const std::vector<std::shared_ptr<Field>> fields_dst);
+  bool get_next_valid() override;
+  const uint8_t *get() const override;
+};
+
+class GatherIterator : public Iterator {
+protected:
+  bool built{false};
+  int fd, record_per_page;
+  int n_records{0}, dst_iter{0};
+  std::vector<std::shared_ptr<Field>> fields_src;
+
+  GatherIterator(IteratorType type) : Iterator(type) {}
+
+public:
+  virtual void build() = 0;
+};
+
+class AggregateIterator : public GatherIterator {
+private:
+  typedef int count_t;
+  std::shared_ptr<PermuteIterator> iter;
+  std::shared_ptr<Field> group_by_field;
+  int group_by_field_offset;
+  int export_len;
+  std::vector<Aggregator> aggrs;
+  bool exclude_group_by_field;
+
+public:
+  AggregateIterator(std::shared_ptr<PermuteIterator> iterator,
                     std::shared_ptr<Field> group_by_field,
-                    const std::vector<Aggregator> &aggrs);
+                    const std::vector<std::shared_ptr<Field>> fields_dst_,
+                    const std::vector<Aggregator> &aggrs,
+                    bool exclude_group_by_field);
+  void update(uint8_t *p, uint8_t *o);
+  bool get_next_valid() override;
+  const uint8_t *get() const override;
 };

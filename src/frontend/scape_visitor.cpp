@@ -439,11 +439,14 @@ std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
   if (ctx->aggregator() != nullptr) {
     aggr = str2aggr(ctx->aggregator()->getText());
   }
-  auto ret = ctx->column()->accept(this);
-  if (!ret.has_value()) {
-    return std::any();
+  std::shared_ptr<Field> field = nullptr;
+  if (ctx->column() != nullptr) {
+    auto ret = ctx->column()->accept(this);
+    if (!ret.has_value()) {
+      return std::any();
+    }
+    field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
   }
-  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
 
   /// TODO: this is a workaround for current judger
   std::string s = ctx->column()->getText();

@@ -630,7 +630,7 @@ void TableManager::drop_unique(const std::string &uk_name) {
   printf("ERROR: unique key %s not found.\n", uk_name.data());
 }
 
-std::shared_ptr<Iterator> TableManager::make_iterator(
+std::shared_ptr<BlockIterator> TableManager::make_iterator(
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_dst) {
   std::map<int, std::shared_ptr<IndexMeta>> first_key_offsets;

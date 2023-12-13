@@ -7,7 +7,7 @@
 #include <storage/storage.h>
 #include <utils/config.h>
 
-const uint8_t *Iterator::get() const {
+const uint8_t *BlockIterator::get() const {
   uint8_t *current_dst_page = PagedBuffer::get()->read_file_rd(
       std::make_pair(fd_dst, dst_iter / record_per_page));
   return current_dst_page + (dst_iter % record_per_page) * record_len;
@@ -18,7 +18,7 @@ RecordIterator::RecordIterator(
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
     const std::vector<std::shared_ptr<Field>> &fields_dst_)
-    : Iterator(IteratorType::RECORD) {
+    : BlockIterator(IteratorType::RECORD) {
   record_manager = rec_;
   fields_src = fields_src_;
   fd_src = record_manager->fd;
@@ -36,7 +36,7 @@ RecordIterator::RecordIterator(
     field_ids_src.insert(field->field_id);
   }
   for (auto field : fields_dst_) {
-    if (field_ids_src.contains(field->field_id))
+    if (field != nullptr)
       field_ids_dst.insert(field->field_id);
   }
 
@@ -174,7 +174,7 @@ IndexIterator::IndexIterator(
     const std::vector<std::shared_ptr<WhereConstraint>> &cons_,
     const std::vector<std::shared_ptr<Field>> &fields_src_,
     const std::vector<std::shared_ptr<Field>> &fields_dst_)
-    : Iterator(IteratorType::INDEX), lbound(lbound_), rbound(rbound_) {
+    : BlockIterator(IteratorType::INDEX), lbound(lbound_), rbound(rbound_) {
   fields_src = fields_src_;
   tree = index->tree;
   fd_src = tree->get_fd();
@@ -193,7 +193,8 @@ IndexIterator::IndexIterator(
   }
 
   for (auto field : fields_dst_) {
-    field_ids_dst.insert(field->field_id);
+    if (field != nullptr)
+      field_ids_dst.insert(field->field_id);
   }
   for (auto constraint : cons_) {
     if (constraint->live_in(table_id)) {
@@ -321,10 +322,10 @@ int IndexIterator::fill_next_block() {
 
 /// NOTE: maintain original and new [index, offset] of fields
 JoinIterator::JoinIterator(
-    std::shared_ptr<Iterator> lhs_, std::shared_ptr<Iterator> rhs_,
+    std::shared_ptr<BlockIterator> lhs_, std::shared_ptr<BlockIterator> rhs_,
     const std::vector<std::shared_ptr<WhereConstraint>> &cons,
     const std::vector<std::shared_ptr<Field>> &fields_dst_)
-    : Iterator(IteratorType::JOIN), lhs(lhs_), rhs(rhs_) {
+    : BlockIterator(IteratorType::JOIN), lhs(lhs_), rhs(rhs_) {
   source_ended = false;
   const auto &ltables = lhs->get_table_ids();
   const auto &rtables = rhs->get_table_ids();
@@ -352,7 +353,7 @@ JoinIterator::JoinIterator(
   }
 
   for (auto field : fields_dst_) {
-    if (field_ids_src.contains(field->field_id))
+    if (field != nullptr)
       field_ids_dst.insert(field->field_id);
   }
   for (auto it_cons : cons) {
@@ -491,14 +492,111 @@ void JoinIterator::reset_all() {
   source_ended = false;
 }
 
-AggregateIterator::AggregateIterator(std::shared_ptr<Iterator> iterator,
-                                     std::shared_ptr<Field> group_by_field_,
-                                     const std::vector<Aggregator> &aggrs_)
-    : Iterator(IteratorType::AGGERGATE), iter(iterator),
-      group_by_field(group_by_field_), aggrs(aggrs_) {
-  fd_dst = FileMapping::get()->create_temp_file();
-  fields_dst = iter->get_fields_dst();
-  record_len = iter->get_record_len();
-  record_per_page = Config::PAGE_SIZE / record_len;
-  table_ids = iter->get_table_ids();
+PermuteIterator::PermuteIterator(
+    std::shared_ptr<BlockIterator> iter,
+    const std::vector<std::shared_ptr<Field>> fields_dst_)
+    : Iterator(IteratorType::PERMUTE), iter(iter) {
+  fields_dst = fields_dst_;
+  fields_src = iter->get_fields_dst();
+
+  std::map<unified_id_t, std::pair<int, int>> field_id_to_idx;
+  int col_offset = sizeof(bitmap_t);
+  for (size_t i = 0; i < fields_src.size(); i++) {
+    field_id_to_idx[fields_src[i]->field_id] = std::make_pair(i, col_offset);
+    col_offset += fields_src[i]->get_size();
+  }
+  buffer.resize(col_offset);
+  for (auto field : fields_dst) {
+    if (field != nullptr)
+      permute_info.push_back(field_id_to_idx[field->field_id]);
+  }
 }
+
+const uint8_t *PermuteIterator::get() const { return buffer.data(); }
+
+bool PermuteIterator::get_next_valid() {
+  iter->block_next();
+  if (iter->block_end()) {
+    iter->fill_next_block();
+  }
+  if (iter->all_end()) {
+    return false;
+  }
+  const uint8_t *p = iter->get();
+  uint8_t *dst = buffer.data();
+  bitmap_t bitmap_src = *(bitmap_t *)p;
+  bitmap_t bitmap_dst = 0;
+  int dst_offset = sizeof(bitmap_t);
+  for (size_t i = 0; i < permute_info.size(); ++i) {
+    auto [idx, offset] = permute_info[i];
+    if ((bitmap_src >> idx) & 1) {
+      bitmap_dst |= 1 << i;
+      memcpy(dst + dst_offset, p + offset, fields_dst[i]->get_size());
+    }
+    dst_offset += fields_dst[i]->get_size();
+  }
+  *(bitmap_t *)dst = bitmap_dst;
+  return true;
+}
+
+AggregateIterator::AggregateIterator(
+    std::shared_ptr<PermuteIterator> iterator,
+    std::shared_ptr<Field> group_by_field_,
+    const std::vector<std::shared_ptr<Field>> fields_dst_,
+    const std::vector<Aggregator> &aggrs_, bool exclude_group_by_field_)
+    : GatherIterator(IteratorType::AGGERGATE), iter(iterator),
+      group_by_field(group_by_field_), aggrs(aggrs_),
+      exclude_group_by_field(exclude_group_by_field_) {
+  fd = FileMapping::get()->create_temp_file();
+  fields_src = iter->get_fields_dst();
+  int offset = sizeof(bitmap_t);
+  export_len = sizeof(bitmap_t);
+  for (size_t i = 0; i < fields_src.size(); ++i) {
+    if (fields_src[i]->field_id == group_by_field->field_id) {
+      group_by_field_offset = offset;
+      if (exclude_group_by_field) {
+        assert(i + 1 == fields_src.size());
+        break;
+      }
+    }
+    if (aggrs[i] == Aggregator::AVG &&
+        fields_src[i]->dtype_meta->type == DataType::INT) {
+      auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
+      fake->dtype_meta = DataTypeBase::build(DataType::FLOAT);
+      fields_dst.push_back(fake);
+    } else if (aggrs[i] == Aggregator::COUNT &&
+               fields_src[i]->dtype_meta->type != DataType::INT) {
+      auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
+      fake->dtype_meta = DataTypeBase::build(DataType::INT);
+      fields_dst.push_back(fake);
+    } else {
+      fields_dst.push_back(fields_src[i]);
+    }
+    offset += sizeof(count_t) + fields_src[i]->get_size();
+    export_len += fields_dst[i]->get_size();
+  }
+  record_len = offset;
+  record_per_page = Config::PAGE_SIZE / record_len;
+}
+
+void AggregateIterator::update(uint8_t *p, uint8_t *o) {
+  (*(count_t *)p)++;
+  if (*(count_t *)p == 1) {
+    memcpy(p + sizeof(count_t), o, record_len - sizeof(count_t));
+    return;
+  }
+  auto ptr = p + sizeof(count_t) + sizeof(bitmap_t);
+  for (size_t i = 0; i < fields_src.size(); ++i) {
+    if (fields_src[i]->dtype_meta->type == DataType::INT) {
+      switch (aggrs[i]) {
+      case Aggregator::COUNT:
+        break;
+
+      default:
+        assert(0);
+      }
+    }
+  }
+}
+
+bool AggregateIterator::get_next_valid() { assert(false); }

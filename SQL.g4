@@ -126,7 +126,7 @@ where_and_clause
 where_clause
     : column operator_ expression            # where_operator_expression
     | column operator_ '(' select_table ')'  # where_operator_select
-    | column 'IS' (Not)? Null              # where_null
+    | column 'IS' (Not)? Null                # where_null
     | column 'IN' value_list                 # where_in_list
     | column 'IN' '(' select_table ')'       # where_in_select
     | column 'LIKE' String                   # where_like_string

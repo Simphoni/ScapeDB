@@ -113,10 +113,10 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
       if ((bitmap >> i) & 1) {
         switch (field[i]->dtype_meta->type) {
         case DataType::INT:
-          print(*(int *)(p), maxlen[i]);
+          print(*(const IntType::DType *)(p), maxlen[i]);
           break;
         case DataType::FLOAT:
-          print(*(double *)(p), maxlen[i]);
+          print(*(const FloatType::DType *)(p), maxlen[i]);
           break;
         case DataType::VARCHAR:
           print((const char *)(p), maxlen[i]);

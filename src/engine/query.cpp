@@ -28,47 +28,13 @@ void QueryPlanner::generate_plan() {
     tmp_it = std::shared_ptr<JoinIterator>(new JoinIterator(
         tmp_it, direct_iterators[i], constraints, selector->columns));
   }
-  iter = tmp_it;
-
-  std::map<unified_id_t, std::pair<int, int>> field_id_to_idx;
-  const auto &results = iter->get_fields_dst();
-  int col_offset = sizeof(bitmap_t);
-  for (size_t i = 0; i < results.size(); i++) {
-    field_id_to_idx[results[i]->field_id] = std::make_pair(i, col_offset);
-    col_offset += results[i]->get_size();
-  }
-  buffer.resize(col_offset);
-  for (auto field : selector->columns) {
-    permute_info.push_back(field_id_to_idx[field->field_id]);
-  }
+  iter = std::shared_ptr<PermuteIterator>(
+      new PermuteIterator(tmp_it, selector->columns));
 }
 
-const uint8_t *QueryPlanner::get() const { return buffer.data(); }
+const uint8_t *QueryPlanner::get() const { return iter->get(); }
 
-bool QueryPlanner::next() {
-  iter->block_next();
-  if (iter->block_end()) {
-    iter->fill_next_block();
-  }
-  if (iter->all_end()) {
-    return false;
-  }
-  const uint8_t *p = iter->get();
-  uint8_t *dst = buffer.data();
-  bitmap_t bitmap_src = *(bitmap_t *)p;
-  bitmap_t bitmap_dst = 0;
-  int dst_offset = sizeof(bitmap_t);
-  for (size_t i = 0; i < permute_info.size(); ++i) {
-    auto [idx, offset] = permute_info[i];
-    if ((bitmap_src >> idx) & 1) {
-      bitmap_dst |= 1 << i;
-      memcpy(dst + dst_offset, p + offset, selector->columns[i]->get_size());
-    }
-    dst_offset += selector->columns[i]->get_size();
-  }
-  *(bitmap_t *)dst = bitmap_dst;
-  return true;
-}
+bool QueryPlanner::next() { return iter->get_next_valid() != 0; }
 
 inline bool null_check(const char *p, int pos) {
   return ((*(const bitmap_t *)p) >> pos) & 1;
