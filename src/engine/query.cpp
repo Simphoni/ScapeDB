@@ -69,10 +69,10 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
   int col_off = field->pers_offset;
   this->column_offset = col_off;
   this->op = Operator::NE;
-  if (field->dtype_meta->type == DataType::INT ||
-      field->dtype_meta->type == DataType::DATE) {
+  if (field->datatype->type == DataType::INT ||
+      field->datatype->type == DataType::DATE) {
     int value = 0;
-    if (field->dtype_meta->type == DataType::INT) {
+    if (field->datatype->type == DataType::INT) {
       if (val.type() != typeid(IType)) {
         printf("ERROR: where clause type mismatch (expect INT)\n");
         has_err = true;
@@ -136,7 +136,7 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     default:
       assert(false);
     }
-  } else if (field->dtype_meta->type == DataType::FLOAT) {
+  } else if (field->datatype->type == DataType::FLOAT) {
     double value = 0;
     if (val.type() == typeid(IType)) {
       value = std::any_cast<IType>(std::move(val));
@@ -282,10 +282,10 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
   table_id_other = other->table_id;
   field_id1 = field->field_id;
   field_id2 = other->field_id;
-  dtype = field->dtype_meta->type;
+  dtype = field->datatype->type;
   optype = op;
   len = std::min(field->get_size(), other->get_size());
-  assert(dtype == other->dtype_meta->type);
+  assert(dtype == other->datatype->type);
 }
 
 void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
@@ -508,7 +508,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
     set = [=](char *record) { *(bitmap_t *)record &= ~(1 << col_idx); };
     return;
   }
-  if (field->dtype_meta->type == INT) {
+  if (field->datatype->type == INT) {
     int val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
@@ -523,7 +523,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       *(bitmap_t *)record |= 1 << col_idx;
       *(int *)(record + col_off) = val;
     };
-  } else if (field->dtype_meta->type == FLOAT) {
+  } else if (field->datatype->type == FLOAT) {
     double val = 0;
     if (value_.type() == typeid(int)) {
       val = std::any_cast<int>(value_);
@@ -538,7 +538,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       *(bitmap_t *)record |= 1 << col_idx;
       *(double *)(record + col_off) = val;
     };
-  } else if (field->dtype_meta->type == VARCHAR) {
+  } else if (field->datatype->type == VARCHAR) {
     std::string s;
     int mxlen = field->get_size();
     if (value_.type() != typeid(std::string)) {
@@ -553,7 +553,7 @@ SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {
       memcpy(record + col_off, s.data(), s.size());
       record[col_off + s.size()] = 0;
     };
-  } else if (field->dtype_meta->type == DataType::DATE) {
+  } else if (field->datatype->type == DataType::DATE) {
     int val = 0;
     if (value_.type() == typeid(std::string)) {
       auto ret =

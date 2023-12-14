@@ -293,11 +293,11 @@ std::any ScapeVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
 std::any ScapeVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
   std::shared_ptr<Field> field =
       std::make_shared<Field>(ctx->identifier()->getText(), get_unified_id());
-  field->dtype_meta = DataTypeBase::build(ctx->type_()->getText());
+  field->datatype = DataTypeBase::build(ctx->type_()->getText());
   if (ctx->Null() != nullptr) {
     field->notnull = true;
   }
-  auto data_meta = field->dtype_meta;
+  auto data_meta = field->datatype;
   data_meta->has_default_val = false;
   if (ctx->value() != nullptr) {
     std::any val = ctx->value()->accept(this);
@@ -560,7 +560,7 @@ std::any ScapeVisitor::visitWhere_operator_expression(
       return std::any();
     }
     auto other = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
-    if (other->dtype_meta->type != other->dtype_meta->type) {
+    if (other->datatype->type != other->datatype->type) {
       has_err = true;
       printf("ERROR: mismatch type for %s and %s.\n", field->field_name.data(),
              other->field_name.data());

@@ -315,7 +315,7 @@ void TableManager::insert_record(const std::vector<std::any> &values) {
   bitmap_t bitmap = 0;
   int has_val = 0;
   for (size_t i = 0; i < fields.size(); ++i) {
-    ptr_cur = fields[i]->dtype_meta->write_buf(ptr_cur, values[i], has_val);
+    ptr_cur = fields[i]->datatype->write_buf(ptr_cur, values[i], has_val);
     if (has_val) {
       bitmap |= (1 << i);
     }

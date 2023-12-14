@@ -194,7 +194,7 @@ struct UniqueKey : public KeyBase {
 
 struct Field {
   std::string field_name;
-  std::shared_ptr<DataTypeBase> dtype_meta;
+  std::shared_ptr<DataTypeBase> datatype;
   unified_id_t field_id, table_id;
   int pers_index, pers_offset;
   bool notnull{false};
@@ -208,7 +208,7 @@ struct Field {
   void deserialize(SequentialAccessor &s);
   void serialize(SequentialAccessor &s) const;
 
-  std::string type_str() const { return dtype_meta->type_str(); }
+  std::string type_str() const { return datatype->type_str(); }
   /// NOTE: returns mxlen + 1 for VARCHAR
-  inline int get_size() const noexcept { return dtype_meta->get_size(); }
+  inline int get_size() const noexcept { return datatype->get_size(); }
 };

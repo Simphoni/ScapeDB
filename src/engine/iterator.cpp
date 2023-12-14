@@ -564,14 +564,14 @@ AggregateIterator::AggregateIterator(
   for (size_t i = 0; i < fields_dst_.size(); ++i) {
     auto aggr = aggrs[i];
     auto dtype = fields_dst_[i] == nullptr ? DataType::INT
-                                           : fields_dst_[i]->dtype_meta->type;
+                                           : fields_dst_[i]->datatype->type;
     if (fields_dst_[i] == nullptr) {
       // COUNT(*)
       caster.push_back((field_caster){DataType::INT, 0, -1, -1});
     } else {
       auto [idx, src_offset] = field_id_to_idx[fields_dst_[i]->field_id];
       caster.push_back((field_caster){
-          fields_dst_[i]->dtype_meta->type,
+          fields_dst_[i]->datatype->type,
           aggr == Aggregator::COUNT ? 0 : fields_dst_[i]->get_size(), idx,
           src_offset});
     }
@@ -583,11 +583,11 @@ AggregateIterator::AggregateIterator(
     }
     if (aggr == Aggregator::AVG) {
       auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
-      fake->dtype_meta = DataTypeBase::build(DataType::FLOAT);
+      fake->datatype = DataTypeBase::build(DataType::FLOAT);
       fields_dst.push_back(fake);
     } else if (aggr == Aggregator::COUNT) {
       auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
-      fake->dtype_meta = DataTypeBase::build(DataType::INT);
+      fake->datatype = DataTypeBase::build(DataType::INT);
       fields_dst.push_back(fake);
     } else {
       fields_dst.push_back(fields_dst_[i]);
@@ -597,6 +597,10 @@ AggregateIterator::AggregateIterator(
   }
   record_len = offset;
   record_per_page = Config::PAGE_SIZE / record_len;
+  if (group_by_field == nullptr) {
+    auto ptr = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, 0));
+    memset(ptr, 0, Config::PAGE_SIZE);
+  }
 }
 
 void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
@@ -604,7 +608,7 @@ void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
   bitmap_t bitmap_src = *(bitmap_t *)o;
   for (size_t i = 0; i < caster.size(); ++i) {
     auto aggr = aggrs[i];
-    auto optr = o + caster[i].offset;
+    auto oelem = o + caster[i].offset;
     if (aggr == Aggregator::COUNT && caster[i].idx == -1) {
       /// COUNT(*)
       ++(*(count_t *)ptr);
@@ -612,6 +616,7 @@ void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
       continue;
     }
     if (((bitmap_src >> caster[i].idx) & 1) == 0) {
+      /// NULL
       ptr += sizeof(count_t) + caster[i].len;
       continue;
     }
@@ -621,12 +626,12 @@ void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
       continue;
     }
     if (cnt == 1) {
-      memcpy(ptr, o + caster[i].offset, caster[i].len);
+      memcpy(ptr, oelem, caster[i].len);
     } else if (caster[i].type == DataType::INT ||
                caster[i].type == DataType::DATE) {
       using DType = IntType::DType;
       DType old_data = *(const DType *)(ptr);
-      DType new_data = *(const DType *)(optr);
+      DType new_data = *(const DType *)(oelem);
       switch (aggr) {
       case Aggregator::SUM:
       case Aggregator::AVG:
@@ -651,7 +656,7 @@ void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
     } else if (caster[i].type == DataType::FLOAT) {
       using DType = FloatType::DType;
       DType old_data = *(const DType *)(ptr);
-      DType new_data = *(const DType *)(optr);
+      DType new_data = *(const DType *)(oelem);
       switch (aggr) {
       case Aggregator::SUM:
       case Aggregator::AVG:
@@ -675,17 +680,17 @@ void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
     } else if (caster[i].type == DataType::VARCHAR) {
       switch (aggr) {
       case Aggregator::MIN:
-        if (strcmp((const char *)ptr, (const char *)(optr)) > 0) {
-          memcpy(ptr, optr, caster[i].len);
+        if (strcmp((const char *)ptr, (const char *)(oelem)) > 0) {
+          memcpy(ptr, oelem, caster[i].len);
         }
         break;
       case Aggregator::MAX:
-        if (strcmp((const char *)ptr, (const char *)(optr)) < 0) {
-          memcpy(ptr, optr, caster[i].len);
+        if (strcmp((const char *)ptr, (const char *)(oelem)) < 0) {
+          memcpy(ptr, oelem, caster[i].len);
         }
         break;
       case Aggregator::NONE:
-        if (strcmp((const char *)ptr, (const char *)(optr)) != 0) {
+        if (strcmp((const char *)ptr, (const char *)(oelem)) != 0) {
           has_err = true;
           printf("ERROR: cannot aggregate data with NONE.\n");
         }
@@ -716,7 +721,7 @@ void AggregateIterator::build() {
     int pos = 0;
     const uint8_t *const o = iter->get();
     if (group_by_field != nullptr) {
-      switch (group_by_field->dtype_meta->type) {
+      switch (group_by_field->datatype->type) {
       case DataType::INT:
       case DataType::DATE: {
         IntType::DType val =
@@ -724,7 +729,7 @@ void AggregateIterator::build() {
         if (map_int.contains(val)) {
           pos = map_int[val];
         } else {
-          pos = map_int[val] = n_records++;
+          pos = map_int[val] = assign_page();
         }
         break;
       }
@@ -734,7 +739,7 @@ void AggregateIterator::build() {
         if (map_float.contains(val)) {
           pos = map_float[val];
         } else {
-          pos = map_float[val] = n_records++;
+          pos = map_float[val] = assign_page();
         }
         break;
       }
@@ -743,7 +748,7 @@ void AggregateIterator::build() {
         if (map_string.contains(val)) {
           pos = map_string[val];
         } else {
-          pos = map_string[val] = n_records++;
+          pos = map_string[val] = assign_page();
         }
         break;
       }
@@ -805,4 +810,13 @@ bool AggregateIterator::get_next_valid() {
   *(bitmap_t *)buffer.data() = mask;
 
   return true;
+}
+
+int AggregateIterator::assign_page() {
+  if (n_records % record_per_page == 0) {
+    auto ptr = PagedBuffer::get()->read_file_rdwr(
+        std::make_pair(fd, n_records / record_per_page));
+    memset(ptr, 0, Config::PAGE_SIZE);
+  }
+  return n_records++;
 }

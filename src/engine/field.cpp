@@ -435,12 +435,12 @@ void UniqueKey::build(const TableManager *table) {
 void Field::serialize(SequentialAccessor &s) const {
   s.write_str(field_name);
   s.write_byte(notnull);
-  dtype_meta->serialize(s);
+  datatype->serialize(s);
 }
 
 void Field::deserialize(SequentialAccessor &s) {
   field_name = s.read_str();
   notnull = s.read_byte();
-  dtype_meta = DataTypeBase::build(DataType(s.read_byte()));
-  dtype_meta->deserialize(s);
+  datatype = DataTypeBase::build(DataType(s.read_byte()));
+  datatype->deserialize(s);
 }

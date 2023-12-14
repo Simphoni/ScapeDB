@@ -54,7 +54,7 @@ void tabulate(const std::vector<std::string> &content, int nrow, int ncol) {
 }
 
 int fmt_width(std::shared_ptr<Field> f) {
-  switch (f->dtype_meta->type) {
+  switch (f->datatype->type) {
   case DataType::INT:
     return 10;
   case DataType::FLOAT:
@@ -111,7 +111,7 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
     std::cout << "|";
     for (int i = 0; i < ncol; i++) {
       if ((bitmap >> i) & 1) {
-        switch (field[i]->dtype_meta->type) {
+        switch (field[i]->datatype->type) {
         case DataType::INT:
           print(*(const IntType::DType *)(p), maxlen[i]);
           break;
@@ -158,7 +158,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
     p += sizeof(bitmap_t);
     for (int i = 0; i < ncol; i++) {
       if ((bitmap >> i) & 1) {
-        switch (field[i]->dtype_meta->type) {
+        switch (field[i]->datatype->type) {
         case DataType::INT:
           printf("%d", *(IntType::DType *)(p));
           break;

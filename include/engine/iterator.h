@@ -184,6 +184,7 @@ private:
 
   void build() override;
   void update(uint8_t *p, const uint8_t *o);
+  int assign_page();
 
 public:
   AggregateIterator(std::shared_ptr<BlockIterator> iterator,
