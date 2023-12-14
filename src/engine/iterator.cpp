@@ -540,63 +540,269 @@ bool PermuteIterator::get_next_valid() {
 }
 
 AggregateIterator::AggregateIterator(
-    std::shared_ptr<PermuteIterator> iterator,
+    std::shared_ptr<BlockIterator> iterator,
     std::shared_ptr<Field> group_by_field_,
     const std::vector<std::shared_ptr<Field>> fields_dst_,
-    const std::vector<Aggregator> &aggrs_, bool exclude_group_by_field_)
+    const std::vector<Aggregator> &aggrs_)
     : GatherIterator(IteratorType::AGGERGATE), iter(iterator),
-      group_by_field(group_by_field_), aggrs(aggrs_),
-      exclude_group_by_field(exclude_group_by_field_) {
+      group_by_field(group_by_field_), aggrs(aggrs_) {
   fd = FileMapping::get()->create_temp_file();
   fields_src = iter->get_fields_dst();
-  int offset = sizeof(bitmap_t);
-  export_len = sizeof(bitmap_t);
+  std::map<unified_id_t, std::pair<int, int>> field_id_to_idx;
+  int src_offset = sizeof(bitmap_t);
   for (size_t i = 0; i < fields_src.size(); ++i) {
-    if (fields_src[i]->field_id == group_by_field->field_id) {
-      group_by_field_offset = offset;
-      if (exclude_group_by_field) {
-        assert(i + 1 == fields_src.size());
-        break;
-      }
+    if (group_by_field != nullptr &&
+        fields_src[i]->field_id == group_by_field->field_id) {
+      group_by_field_offset = src_offset;
     }
-    if (aggrs[i] == Aggregator::AVG &&
-        fields_src[i]->dtype_meta->type == DataType::INT) {
+    field_id_to_idx[fields_src[i]->field_id] = std::make_pair(i, src_offset);
+    src_offset += fields_src[i]->get_size();
+  }
+
+  int offset = 0;
+  export_len = sizeof(bitmap_t);
+  for (size_t i = 0; i < fields_dst_.size(); ++i) {
+    auto aggr = aggrs[i];
+    auto dtype = fields_dst_[i] == nullptr ? DataType::INT
+                                           : fields_dst_[i]->dtype_meta->type;
+    if (fields_dst_[i] == nullptr) {
+      // COUNT(*)
+      caster.push_back((field_caster){DataType::INT, 0, -1, -1});
+    } else {
+      auto [idx, src_offset] = field_id_to_idx[fields_dst_[i]->field_id];
+      caster.push_back((field_caster){
+          fields_dst_[i]->dtype_meta->type,
+          aggr == Aggregator::COUNT ? 0 : fields_dst_[i]->get_size(), idx,
+          src_offset});
+    }
+    if ((dtype == DataType::VARCHAR || dtype == DataType::DATE) &&
+        (aggr == Aggregator::AVG || aggr == Aggregator::SUM)) {
+      has_err = true;
+      printf("ERROR: cannot aggregate VARCHAR with AVG/SUM.\n");
+      break;
+    }
+    if (aggr == Aggregator::AVG) {
       auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
       fake->dtype_meta = DataTypeBase::build(DataType::FLOAT);
       fields_dst.push_back(fake);
-    } else if (aggrs[i] == Aggregator::COUNT &&
-               fields_src[i]->dtype_meta->type != DataType::INT) {
+    } else if (aggr == Aggregator::COUNT) {
       auto fake = std::shared_ptr<Field>(new Field(get_unified_id()));
       fake->dtype_meta = DataTypeBase::build(DataType::INT);
       fields_dst.push_back(fake);
     } else {
-      fields_dst.push_back(fields_src[i]);
+      fields_dst.push_back(fields_dst_[i]);
     }
-    offset += sizeof(count_t) + fields_src[i]->get_size();
+    offset += sizeof(count_t) + caster.back().len;
     export_len += fields_dst[i]->get_size();
   }
   record_len = offset;
   record_per_page = Config::PAGE_SIZE / record_len;
 }
 
-void AggregateIterator::update(uint8_t *p, uint8_t *o) {
-  (*(count_t *)p)++;
-  if (*(count_t *)p == 1) {
-    memcpy(p + sizeof(count_t), o, record_len - sizeof(count_t));
-    return;
-  }
-  auto ptr = p + sizeof(count_t) + sizeof(bitmap_t);
-  for (size_t i = 0; i < fields_src.size(); ++i) {
-    if (fields_src[i]->dtype_meta->type == DataType::INT) {
-      switch (aggrs[i]) {
-      case Aggregator::COUNT:
+void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
+  auto ptr = p;
+  bitmap_t bitmap_src = *(bitmap_t *)o;
+  for (size_t i = 0; i < caster.size(); ++i) {
+    auto aggr = aggrs[i];
+    auto optr = o + caster[i].offset;
+    if (aggr == Aggregator::COUNT && caster[i].idx == -1) {
+      /// COUNT(*)
+      ++(*(count_t *)ptr);
+      ptr += sizeof(count_t);
+      continue;
+    }
+    if (((bitmap_src >> caster[i].idx) & 1) == 0) {
+      ptr += sizeof(count_t) + caster[i].len;
+      continue;
+    }
+    count_t cnt = ++(*(count_t *)ptr);
+    ptr += sizeof(count_t);
+    if (aggr == Aggregator::COUNT) {
+      continue;
+    }
+    if (cnt == 1) {
+      memcpy(ptr, o + caster[i].offset, caster[i].len);
+    } else if (caster[i].type == DataType::INT ||
+               caster[i].type == DataType::DATE) {
+      using DType = IntType::DType;
+      DType old_data = *(const DType *)(ptr);
+      DType new_data = *(const DType *)(optr);
+      switch (aggr) {
+      case Aggregator::SUM:
+      case Aggregator::AVG:
+        *(DType *)ptr += new_data;
         break;
-
+      case Aggregator::MIN:
+        *(DType *)ptr = std::min(old_data, new_data);
+        break;
+      case Aggregator::MAX:
+        *(DType *)ptr = std::max(old_data, new_data);
+        break;
+      case Aggregator::NONE:
+        if (old_data != new_data) {
+          has_err = true;
+          printf("ERROR: cannot aggregate data with NONE (%d != %d).\n",
+                 old_data, new_data);
+        }
+        break;
       default:
-        assert(0);
+        assert(false);
+      }
+    } else if (caster[i].type == DataType::FLOAT) {
+      using DType = FloatType::DType;
+      DType old_data = *(const DType *)(ptr);
+      DType new_data = *(const DType *)(optr);
+      switch (aggr) {
+      case Aggregator::SUM:
+      case Aggregator::AVG:
+        *(DType *)ptr += new_data;
+        break;
+      case Aggregator::MIN:
+        *(DType *)ptr = std::min(old_data, new_data);
+        break;
+      case Aggregator::MAX:
+        *(DType *)ptr = std::max(old_data, new_data);
+        break;
+      case Aggregator::NONE:
+        if (old_data != new_data) {
+          has_err = true;
+          printf("ERROR: cannot aggregate data with NONE.\n");
+        }
+        break;
+      default:
+        assert(false);
+      }
+    } else if (caster[i].type == DataType::VARCHAR) {
+      switch (aggr) {
+      case Aggregator::MIN:
+        if (strcmp((const char *)ptr, (const char *)(optr)) > 0) {
+          memcpy(ptr, optr, caster[i].len);
+        }
+        break;
+      case Aggregator::MAX:
+        if (strcmp((const char *)ptr, (const char *)(optr)) < 0) {
+          memcpy(ptr, optr, caster[i].len);
+        }
+        break;
+      case Aggregator::NONE:
+        if (strcmp((const char *)ptr, (const char *)(optr)) != 0) {
+          has_err = true;
+          printf("ERROR: cannot aggregate data with NONE.\n");
+        }
+        break;
+      default:
+        assert(false);
       }
     }
+    ptr += caster[i].len;
   }
 }
 
-bool AggregateIterator::get_next_valid() { assert(false); }
+void AggregateIterator::build() {
+  if (built)
+    return;
+  built = true;
+  std::unordered_map<IntType::DType, int> map_int;
+  std::unordered_map<FloatType::DType, int> map_float;
+  std::unordered_map<std::string, int> map_string;
+  while (true) {
+    iter->block_next();
+    if (iter->block_end()) {
+      iter->fill_next_block();
+    }
+    if (iter->all_end()) {
+      break;
+    }
+    int pos = 0;
+    const uint8_t *const o = iter->get();
+    if (group_by_field != nullptr) {
+      switch (group_by_field->dtype_meta->type) {
+      case DataType::INT:
+      case DataType::DATE: {
+        IntType::DType val =
+            *(const IntType::DType *)(o + group_by_field_offset);
+        if (map_int.contains(val)) {
+          pos = map_int[val];
+        } else {
+          pos = map_int[val] = n_records++;
+        }
+        break;
+      }
+      case DataType::FLOAT: {
+        FloatType::DType val =
+            *(const FloatType::DType *)(o + group_by_field_offset);
+        if (map_float.contains(val)) {
+          pos = map_float[val];
+        } else {
+          pos = map_float[val] = n_records++;
+        }
+        break;
+      }
+      case DataType::VARCHAR: {
+        std::string val((const char *)(o + group_by_field_offset));
+        if (map_string.contains(val)) {
+          pos = map_string[val];
+        } else {
+          pos = map_string[val] = n_records++;
+        }
+        break;
+      }
+      default:
+        assert(false);
+      }
+    }
+    uint8_t *ptr = PagedBuffer::get()->read_file_rdwr(
+        std::make_pair(fd, pos / record_per_page));
+    ptr += pos % record_per_page * record_len;
+    update(ptr, o);
+  }
+}
+
+const uint8_t *AggregateIterator::get() const { return buffer.data(); }
+
+bool AggregateIterator::get_next_valid() {
+  if (!built) {
+    build();
+  } else {
+    iter_dst++;
+    if (iter_dst >= n_records)
+      return false;
+  }
+  buffer.resize(export_len);
+  uint8_t *ptr = buffer.data();
+  bitmap_t mask = (1 << (sizeof(bitmap_t) << 3)) - 1;
+  ptr += sizeof(bitmap_t);
+  uint8_t *ptr_raw = PagedBuffer::get()->read_file_rd(
+      std::make_pair(fd, iter_dst / record_per_page));
+  ptr_raw += iter_dst % record_per_page * record_len;
+  for (size_t i = 0; i < caster.size(); ++i) {
+    auto aggr = aggrs[i];
+    count_t cnt = *(count_t *)ptr_raw;
+    if (aggr == Aggregator::COUNT) {
+      /// COUNT(*)
+      *(IntType::DType *)ptr = cnt;
+      ptr += sizeof(IntType::DType);
+    } else if (cnt == 0 &&
+               (aggr == Aggregator::MIN || aggr == Aggregator::MAX ||
+                aggr == Aggregator::AVG)) {
+      mask &= ~(1 << i);
+      ptr += caster[i].len;
+    } else if (aggr == Aggregator::AVG) {
+      double value = 0;
+      if (caster[i].type == DataType::INT) {
+        value = *(IntType::DType *)(ptr_raw + sizeof(count_t)) / (double)cnt;
+      } else {
+        value = *(FloatType::DType *)(ptr_raw + sizeof(count_t)) / (double)cnt;
+      }
+      *(FloatType::DType *)ptr = value;
+      ptr += sizeof(FloatType::DType);
+    } else {
+      memcpy(ptr, ptr_raw + sizeof(count_t), caster[i].len);
+      ptr += caster[i].len;
+    }
+    ptr_raw += sizeof(count_t) + caster[i].len;
+  }
+  *(bitmap_t *)buffer.data() = mask;
+
+  return true;
+}

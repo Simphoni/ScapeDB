@@ -19,22 +19,44 @@ inline bool cmp(std::shared_ptr<TableManager> p,
 
 void QueryPlanner::generate_plan() {
   std::sort(tables.begin(), tables.end(), cmp);
+  if (group_by_field != nullptr && !selector->has_aggregate) {
+    printf("ERROR: GROUP BY without aggregate\n");
+    has_err = true;
+    return;
+  }
+  std::vector<std::shared_ptr<Field>> fullset = selector->columns;
+  if (group_by_field != nullptr) {
+    bool extend = true;
+    for (auto it : fullset) {
+      if (it != nullptr && it->field_id == group_by_field->field_id) {
+        extend = false;
+      }
+    }
+    if (extend) {
+      fullset.push_back(group_by_field);
+    }
+  }
   for (auto tbl : tables) {
-    direct_iterators.push_back(
-        tbl->make_iterator(constraints, selector->columns));
+    direct_iterators.push_back(tbl->make_iterator(constraints, fullset));
   }
   auto tmp_it = direct_iterators[0];
   for (size_t i = 1; i < direct_iterators.size(); ++i) {
-    tmp_it = std::shared_ptr<JoinIterator>(new JoinIterator(
-        tmp_it, direct_iterators[i], constraints, selector->columns));
+    tmp_it = std::shared_ptr<JoinIterator>(
+        new JoinIterator(tmp_it, direct_iterators[i], constraints, fullset));
   }
-  iter = std::shared_ptr<PermuteIterator>(
-      new PermuteIterator(tmp_it, selector->columns));
+  if (selector->has_aggregate) {
+    iter = std::shared_ptr<AggregateIterator>(new AggregateIterator(
+        tmp_it, group_by_field, selector->columns, selector->aggrs));
+  } else {
+    iter = std::shared_ptr<PermuteIterator>(
+        new PermuteIterator(tmp_it, selector->columns));
+  }
+  selector->columns = iter->get_fields_dst();
 }
 
 const uint8_t *QueryPlanner::get() const { return iter->get(); }
 
-bool QueryPlanner::next() { return iter->get_next_valid() != 0; }
+bool QueryPlanner::next() { return iter->get_next_valid(); }
 
 inline bool null_check(const char *p, int pos) {
   return ((*(const bitmap_t *)p) >> pos) & 1;

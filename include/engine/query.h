@@ -13,14 +13,13 @@ struct Selector {
   std::vector<std::string> header;
   std::vector<std::shared_ptr<Field>> columns;
   std::vector<Aggregator> aggrs;
-  std::shared_ptr<Field> group_by_field;
-  bool has_aggregate;
+  bool has_aggregate{false};
 
-  Selector(std::vector<std::string> &&header,
-           std::vector<std::shared_ptr<Field>> &&columns,
-           std::vector<Aggregator> &&aggrs)
-      : header(std::move(header)), columns(std::move(columns)),
-        aggrs(std::move(aggrs)) {
+  Selector(std::vector<std::string> &&header_,
+           std::vector<std::shared_ptr<Field>> &&columns_,
+           std::vector<Aggregator> &&aggrs_)
+      : header(std::move(header_)), columns(std::move(columns_)),
+        aggrs(std::move(aggrs_)) {
     for (auto aggr : aggrs) {
       if (aggr != Aggregator::NONE) {
         has_aggregate = true;
@@ -90,13 +89,12 @@ class QueryPlanner {
 private:
   std::vector<std::shared_ptr<BlockIterator>> direct_iterators;
   std::shared_ptr<Iterator> iter{nullptr};
-  std::vector<uint8_t> buffer;
-  std::vector<std::pair<int, int>> permute_info;
 
 public:
   std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
+  std::shared_ptr<Field> group_by_field;
 
   void generate_plan();
   const uint8_t *get() const;

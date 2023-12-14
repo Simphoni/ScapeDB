@@ -194,8 +194,9 @@ void update_set_table(
   auto record_manager = table->get_record_manager();
   auto record_iter = std::shared_ptr<RecordIterator>(new RecordIterator(
       record_manager, where_constraints, table->get_fields(), {}));
-  [[maybe_unused]] int modified_rows = 0;
+  int modified_rows = 0;
   while (record_iter->get_next_valid()) {
+    ++modified_rows;
     auto [pn, sn] = record_iter->get_locator();
     auto record_ref = record_manager->get_record_ref(pn, sn);
     memcpy(buf_i.data(), record_ref, record_len);
@@ -239,10 +240,10 @@ void update_set_table(
       break;
     }
     table->insert_record(buf_o.data(), false);
-    ++modified_rows;
   }
-  // TODO: uncomment this
-  // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+  if (!has_err) {
+    Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+  }
 }
 
 void delete_from_table(
@@ -256,12 +257,15 @@ void delete_from_table(
   auto record_iter = std::make_shared<RecordIterator>(
       record_manager, where_constraints, table->get_fields(),
       std::vector<std::shared_ptr<Field>>({}));
-  [[maybe_unused]] int modified_rows = 0;
+  int modified_rows = 0;
   while (record_iter->get_next_valid() && !has_err) {
     auto [pn, sn] = record_iter->get_locator();
     table->erase_record(pn, sn, true);
+    ++modified_rows;
   }
-  // Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+  if (!has_err) {
+    Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+  }
 }
 
 void insert_from_file(const std::string &file_path,
@@ -284,6 +288,7 @@ void insert_from_file(const std::string &file_path,
   buf.resize(table->get_record_len());
   uint8_t *ptr = buf.data();
   *(bitmap_t *)ptr = (1 << column_num) - 1;
+  int n_entries_inserted = 0;
   while (true) {
     while (ch == ',' || ch == '\n') {
       ch = fastIO::getchar();
@@ -340,8 +345,10 @@ void insert_from_file(const std::string &file_path,
       }
     }
     table->insert_record(ptr, false);
+    ++n_entries_inserted;
   }
   fastIO::end_read();
+  Logger::tabulate({"rows", std::to_string(n_entries_inserted)}, 2, 1);
 }
 
 void add_pk(const std::string &table_name, std::shared_ptr<PrimaryKey> key) {

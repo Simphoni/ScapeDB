@@ -6,11 +6,17 @@
 #include <vector>
 
 #include <engine/defs.h>
+#include <engine/field.h>
 #include <storage/defs.h>
 #include <utils/config.h>
 
 const int QUERY_MAX_BLOCK = 8 << 20; /// 8MB
 const int QUERY_MAX_PAGES = QUERY_MAX_BLOCK / Config::PAGE_SIZE;
+
+struct field_caster {
+  DataType type;
+  int len, idx, offset;
+};
 
 /// Iterator class
 /// an iterator reads/gathers records from a "source" (aka "all") and buffers
@@ -155,32 +161,35 @@ class GatherIterator : public Iterator {
 protected:
   bool built{false};
   int fd, record_per_page;
-  int n_records{0}, dst_iter{0};
+  int n_records{0}, iter_dst{0};
+  std::vector<field_caster> caster;
   std::vector<std::shared_ptr<Field>> fields_src;
 
   GatherIterator(IteratorType type) : Iterator(type) {}
 
-public:
   virtual void build() = 0;
 };
 
 class AggregateIterator : public GatherIterator {
 private:
   typedef int count_t;
-  std::shared_ptr<PermuteIterator> iter;
+  static_assert(std::is_same<count_t, IntType::DType>::value,
+                "count_t must equal IntType::DType");
+  std::shared_ptr<BlockIterator> iter;
   std::shared_ptr<Field> group_by_field;
   int group_by_field_offset;
   int export_len;
   std::vector<Aggregator> aggrs;
-  bool exclude_group_by_field;
+  std::vector<uint8_t> buffer;
+
+  void build() override;
+  void update(uint8_t *p, const uint8_t *o);
 
 public:
-  AggregateIterator(std::shared_ptr<PermuteIterator> iterator,
+  AggregateIterator(std::shared_ptr<BlockIterator> iterator,
                     std::shared_ptr<Field> group_by_field,
                     const std::vector<std::shared_ptr<Field>> fields_dst_,
-                    const std::vector<Aggregator> &aggrs,
-                    bool exclude_group_by_field);
-  void update(uint8_t *p, uint8_t *o);
+                    const std::vector<Aggregator> &aggrs);
   bool get_next_valid() override;
   const uint8_t *get() const override;
 };

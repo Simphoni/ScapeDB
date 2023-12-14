@@ -114,8 +114,7 @@ ScapeVisitor::visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) {
   /// reset table data so that (column IN value_list) can be parse correctly
   insert_into_table = nullptr;
   if (!has_err) {
-    // TODO: uncomment this line
-    // Logger::tabulate({"rows", std::to_string(n_entries_inserted)}, 2, 1);
+    Logger::tabulate({"rows", std::to_string(n_entries_inserted)}, 2, 1);
   }
   return std::any();
 }
@@ -249,6 +248,15 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
   }
 
   auto planner = std::make_shared<QueryPlanner>();
+  // before tables_stack is popped
+  if (ctx->group_by() != nullptr) {
+    auto ret = ctx->group_by()->accept(this);
+    if (!ret.has_value()) {
+      return std::any();
+    }
+    planner->group_by_field =
+        std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  }
   planner->selector = std::move(selector);
   planner->tables = std::move(tables_stack.back());
   planner->constraints = std::move(constraints);
@@ -411,10 +419,10 @@ std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
     if (!ret.has_value()) {
       return std::any();
     }
-    selector_ret_t tmp = std::any_cast<selector_ret_t>(ret);
-    header.push_back(std::move(std::get<0>(tmp)));
-    fields.push_back(std::move(std::get<1>(tmp)));
-    aggrs.push_back(std::move(std::get<2>(tmp)));
+    selector_ret_t tmp = std::any_cast<selector_ret_t>(std::move(ret));
+    header.push_back(std::get<0>(tmp));
+    fields.push_back(std::get<1>(tmp));
+    aggrs.push_back(std::get<2>(tmp));
   }
   if (fields.size() == 0) {
     header.clear();
@@ -435,27 +443,24 @@ std::any ScapeVisitor::visitSelectors(SQLParser::SelectorsContext *ctx) {
 /// @return: (caption, field, aggregator)
 /// column | aggregator '(' column ')' | Count '(' '*' ')'
 std::any ScapeVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
+  if (ctx->Count() != nullptr) {
+    return std::make_tuple<std::string, std::shared_ptr<Field>, Aggregator>(
+        "COUNT(*)", nullptr, Aggregator::COUNT);
+  }
   Aggregator aggr = Aggregator::NONE;
   if (ctx->aggregator() != nullptr) {
     aggr = str2aggr(ctx->aggregator()->getText());
   }
-  std::shared_ptr<Field> field = nullptr;
-  if (ctx->column() != nullptr) {
-    auto ret = ctx->column()->accept(this);
-    if (!ret.has_value()) {
-      return std::any();
-    }
-    field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
   }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
 
-  /// TODO: this is a workaround for current judger
-  std::string s = ctx->column()->getText();
-  auto dot = s.find('.');
   std::string caption;
-  if (dot == std::string::npos) {
-    caption = s;
-  } else {
-    caption = s.substr(dot + 1);
+  caption = ctx->column()->identifier().back()->getText();
+  if (aggr != Aggregator::NONE) {
+    caption = ctx->getText();
   }
 
   return std::make_tuple(caption, field, aggr);
