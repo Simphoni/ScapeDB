@@ -35,6 +35,8 @@ struct Selector;
 struct WhereConstraint;
 struct ColumnOpValueConstraint;
 struct ColumnOpColumnConstraint;
+struct ColumnNullConstraint;
+struct ColumnLikeStringConstraint;
 
 struct SetVariable;
 class QueryPlanner;

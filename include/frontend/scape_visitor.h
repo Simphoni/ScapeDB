@@ -87,6 +87,9 @@ public:
 
   std::any visitWhere_null(SQLParser::Where_nullContext *ctx) override;
 
+  std::any
+  visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) override;
+
   /// alter statements
 
   std::any

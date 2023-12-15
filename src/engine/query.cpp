@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <regex>
 
 #include <engine/field.h>
 #include <engine/iterator.h>
@@ -493,6 +494,23 @@ ColumnNullConstraint::ColumnNullConstraint(std::shared_ptr<Field> field,
 bool ColumnNullConstraint::check(const uint8_t *record,
                                  const uint8_t *other) const {
   return chk((const char *)record);
+}
+
+ColumnLikeStringConstraint::ColumnLikeStringConstraint(
+    std::shared_ptr<Field> field, std::string &&pattern_) {
+  table_id = field->table_id;
+  int col_idx = field->pers_index;
+  int col_off = field->pers_offset;
+  std::string local = std::move(pattern_);
+  local = std::regex_replace(local, std::regex("%"), ".*");
+  local = std::regex_replace(local, std::regex("_"), ".");
+  auto cpp_style_pattern = std::regex(local);
+  cmp = [=](const char *record) {
+    if (!null_check(record, col_idx))
+      return false;
+    return std::regex_match(record + col_off, cpp_style_pattern,
+                            std::regex_constants::match_default);
+  };
 }
 
 SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {

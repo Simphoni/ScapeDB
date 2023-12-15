@@ -33,9 +33,7 @@ struct Selector {
 struct WhereConstraint {
   unified_id_t table_id;
 
-  virtual bool check(const uint8_t *record, const uint8_t *other) const {
-    return true;
-  }
+  virtual bool check(const uint8_t *record, const uint8_t *other) const = 0;
   virtual bool live_in(unified_id_t table_id_) { return table_id == table_id_; }
 };
 
@@ -78,6 +76,16 @@ struct ColumnNullConstraint : public WhereConstraint {
 
   ColumnNullConstraint(std::shared_ptr<Field> field, bool field_not_null);
   bool check(const uint8_t *record, const uint8_t *other) const override;
+};
+
+struct ColumnLikeStringConstraint : public WhereConstraint {
+  std::function<bool(const char *)> cmp;
+
+  ColumnLikeStringConstraint(std::shared_ptr<Field> field,
+                             std::string &&pattern_);
+  bool check(const uint8_t *record, const uint8_t *other) const override {
+    return cmp((char *)record);
+  }
 };
 
 struct SetVariable {

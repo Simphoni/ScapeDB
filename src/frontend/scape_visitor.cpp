@@ -585,6 +585,19 @@ std::any ScapeVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
   return std::any();
 }
 
+std::any
+ScapeVisitor::visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  std::string pattern = ctx->String()->getText();
+  pattern = pattern.substr(1, pattern.size() - 2);
+  return std::shared_ptr<WhereConstraint>(
+      new ColumnLikeStringConstraint(field, std::move(pattern)));
+}
+
 // clang-format off
 /// 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'PRIMARY' 'KEY' '(' identifiers ')'
 // clang-format on
