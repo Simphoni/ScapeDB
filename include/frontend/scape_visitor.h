@@ -94,6 +94,12 @@ public:
   std::any
   visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) override;
 
+  std::any visitWhere_operator_select(
+      SQLParser::Where_operator_selectContext *ctx) override;
+
+  std::any
+  visitWhere_in_select(SQLParser::Where_in_selectContext *ctx) override;
+
   /// alter statements
 
   std::any

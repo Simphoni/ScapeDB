@@ -18,6 +18,19 @@ inline bool cmp(std::shared_ptr<TableManager> p,
   return p->get_record_num() < q->get_record_num();
 }
 
+inline bool get_compare_result(int val, Operator op) {
+  if (val == 0 && ((uint8_t)op & (uint8_t)Operator::EQ) > 0) {
+    return true;
+  }
+  if (val > 0 && ((uint8_t)op & (uint8_t)Operator::GT) > 0) {
+    return true;
+  }
+  if (val < 0 && ((uint8_t)op & (uint8_t)Operator::LT) > 0) {
+    return true;
+  }
+  return false;
+}
+
 void QueryPlanner::generate_plan() {
   std::sort(tables.begin(), tables.end(), cmp);
   if (group_by_field != nullptr && !selector->has_aggregate) {
@@ -113,46 +126,12 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
     }
     this->value = value;
     this->op = op;
-    switch (op) {
-    case Operator::EQ:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) == value);
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) != value);
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) >= value);
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) > value);
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) <= value);
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const IType *)(record + col_off) < value);
-      };
-      break;
-    default:
-      assert(false);
-    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, col_idx))
+        return false;
+      IType local = *(const IType *)(record + col_off);
+      return get_compare_result(local < value ? -1 : (local > value), op);
+    };
   } else if (field->datatype->type == DataType::FLOAT) {
     double value = 0;
     if (val.type() == typeid(IType)) {
@@ -164,46 +143,12 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       has_err = true;
       return;
     }
-    switch (op) {
-    case Operator::EQ:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) == value);
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) != value);
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) >= value);
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) > value);
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) <= value);
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record) {
-        return null_check(record, col_idx) &&
-               (*(const FType *)(record + col_off) < value);
-      };
-      break;
-    default:
-      assert(false);
-    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, col_idx))
+        return false;
+      FType local = *(const FType *)(record + col_off);
+      return get_compare_result(local < value ? -1 : (local > value), op);
+    };
   } else {
     if (val.type() != typeid(std::string)) {
       printf("ERROR: where clause type mismatch (expect VARCHAR)\n");
@@ -211,85 +156,11 @@ ColumnOpValueConstraint::ColumnOpValueConstraint(std::shared_ptr<Field> field,
       return;
     }
     std::string value = std::any_cast<std::string>(std::move(val));
-    int len = value.length();
-    switch (op) {
-    case Operator::EQ:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] != value[i])
-            return false;
-        }
-        return record[col_off + value.size()] == 0;
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] != value[i])
-            return true;
-        }
-        return record[col_off + value.size()] != 0;
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] < value[i])
-            return false;
-          if (record[col_off + i] > value[i])
-            return true;
-        }
-        return true;
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] < value[i])
-            return false;
-          if (record[col_off + i] > value[i])
-            return true;
-        }
-        return record[col_off + value.size()] > 0;
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > value[i])
-            return false;
-          if (record[col_off + i] < value[i])
-            return true;
-        }
-        return record[col_off + value.size()] == 0;
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record) {
-        if (!null_check(record, col_idx))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > value[i])
-            return false;
-          if (record[col_off + i] < value[i])
-            return true;
-        }
-        return false; /// cannot be smaller than '\0'
-      };
-      break;
-    default:
-      assert(false);
-    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, col_idx))
+        return false;
+      return get_compare_result(strcmp(record + col_off, value.data()), op);
+    };
   }
 }
 
@@ -307,193 +178,39 @@ ColumnOpColumnConstraint::ColumnOpColumnConstraint(
 
 void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
                                      int col_off_o) {
-  if (dtype == DataType::INT || dtype == DataType::DATE) {
-    switch (optype) {
-    case Operator::EQ:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) ==
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) !=
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) >=
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) >
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) <=
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const IType *)(record + col_off) <
-                *(const IType *)(other + col_off_o));
-      };
-      break;
-    default:
-      assert(false);
-    }
-  } else if (dtype == DataType::FLOAT) {
-    switch (optype) {
-    case Operator::EQ:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) ==
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) !=
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) >=
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) >
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) <=
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record, const char *other) {
-        return null_check(record, col_idx) && null_check(other, col_idx_o) &&
-               (*(const FType *)(record + col_off) <
-                *(const FType *)(other + col_off_o));
-      };
-      break;
-    default:
-      assert(false);
-    }
-  } else if (dtype == DataType::VARCHAR) {
-    int len = this->len;
-    switch (optype) {
-    case Operator::EQ:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] != other[col_off_o + i])
-            return false;
-          if (record[col_off + i] == 0)
-            break;
-        }
-        return true;
-      };
-      break;
-    case Operator::NE:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] != other[col_off_o + i])
-            return true;
-          if (record[col_off + i] == 0)
-            break;
-        }
+  const Operator op = optype;
+  switch (dtype) {
+  case DataType::INT:
+  case DataType::DATE: {
+    cmp = [=](const char *record, const char *other) {
+      if (!null_check(record, col_idx) && !null_check(other, col_idx_o))
         return false;
-      };
-      break;
-    case Operator::GE:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > other[col_off_o + i])
-            return true;
-          else if (record[col_off + i] < other[col_off_o + i])
-            return false;
-          if (record[col_off + i] == 0)
-            break;
-        }
-        return true;
-      };
-      break;
-    case Operator::GT:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > other[col_off_o + i])
-            return true;
-          else if (record[col_off + i] < other[col_off_o + i])
-            return false;
-          if (record[col_off + i] == 0)
-            break;
-        }
+      IType val = *(const IType *)(record + col_off);
+      IType val_o = *(const IType *)(other + col_off_o);
+      return get_compare_result(val < val_o ? -1 : (val > val_o), op);
+    };
+    break;
+  }
+  case DataType::FLOAT: {
+    cmp = [=](const char *record, const char *other) {
+      if (!null_check(record, col_idx) && !null_check(other, col_idx_o))
         return false;
-      };
-      break;
-    case Operator::LE:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > other[col_off_o + i])
-            return false;
-          else if (record[col_off + i] < other[col_off_o + i])
-            return true;
-          if (record[col_off + i] == 0)
-            break;
-        }
-        return true;
-      };
-      break;
-    case Operator::LT:
-      cmp = [=](const char *record, const char *other) {
-        if (!null_check(record, col_idx) || !null_check(other, col_idx_o))
-          return false;
-        for (int i = 0; i < len; ++i) {
-          if (record[col_off + i] > other[col_off_o + i])
-            return false;
-          else if (record[col_off + i] < other[col_off_o + i])
-            return true;
-          if (record[col_off + i] == 0)
-            break;
-        }
+      FType val = *(const FType *)(record + col_off);
+      FType val_o = *(const FType *)(other + col_off_o);
+      return get_compare_result(val < val_o ? -1 : (val > val_o), op);
+    };
+    break;
+  }
+  case DataType::VARCHAR: {
+    cmp = [=](const char *record, const char *other) {
+      if (!null_check(record, col_idx) && !null_check(other, col_idx_o))
         return false;
-      };
-      break;
-    default:
-      assert(false);
-    }
-  } else {
+      return get_compare_result(strcmp(record + col_off, other + col_off_o),
+                                op);
+    };
+    break;
+  }
+  default:
     assert(false);
   }
 }
@@ -527,6 +244,142 @@ ColumnLikeStringConstraint::ColumnLikeStringConstraint(
     return std::regex_match(record + col_off, cpp_style_pattern,
                             std::regex_constants::match_default);
   };
+}
+
+ColumnOpSubqueryConstraint::ColumnOpSubqueryConstraint(
+    std::shared_ptr<Field> field, Operator op,
+    std::shared_ptr<QueryPlanner> subquery) {
+  table_id = field->table_id;
+  const auto &col = subquery->selector->columns;
+  if (col.size() != 1) {
+    has_err = true;
+    printf("ERROR: subquery must select exactly one column\n");
+    return;
+  }
+  int index = field->pers_index;
+  int offset = field->pers_offset;
+  switch (col[0]->datatype->type) {
+  case DataType::INT:
+  case DataType::DATE: {
+    subquery->next();
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    IType val_int = *(const IType *)(subquery->get() + sizeof(bitmap_t));
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      IType val = *(const IType *)(record + offset);
+      return get_compare_result(val < val_int ? -1 : (val > val_int), op);
+    };
+    break;
+  }
+  case DataType::FLOAT: {
+    subquery->next();
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    FType val_float = *(const FType *)(subquery->get() + sizeof(bitmap_t));
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      FType val = *(const FType *)(record + offset);
+      return get_compare_result(val < val_float ? -1 : (val > val_float), op);
+    };
+    break;
+  }
+  case DataType::VARCHAR: {
+    subquery->next();
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    std::string val_str =
+        std::string((const char *)(subquery->get() + sizeof(bitmap_t)));
+    if (subquery->next()) {
+      has_err = true;
+      printf("ERROR: subquery must select exactly one row\n");
+      return;
+    }
+    cmp = [=](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      return get_compare_result(strcmp(record + offset, val_str.data()), op);
+    };
+    break;
+  }
+  default:
+    assert(false);
+  }
+}
+
+ColumnInSubqueryConstraint::ColumnInSubqueryConstraint(
+    std::shared_ptr<Field> field, std::shared_ptr<QueryPlanner> subquery) {
+  table_id = field->table_id;
+  const auto &col = subquery->selector->columns;
+  if (col.size() != 1) {
+    has_err = true;
+    printf("ERROR: subquery must select exactly one column\n");
+    return;
+  }
+  int index = field->pers_index;
+  int offset = field->pers_offset;
+  switch (col[0]->datatype->type) {
+  case DataType::INT:
+  case DataType::DATE: {
+    while (subquery->next()) {
+      vals_int.insert(*(const IType *)(subquery->get() + sizeof(bitmap_t)));
+    }
+    cmp = [=, this](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      IType val = *(const IType *)(record + offset);
+      return this->vals_int.contains(val);
+    };
+    break;
+  }
+  case DataType::FLOAT: {
+    while (subquery->next()) {
+      vals_float.insert(*(const FType *)(subquery->get() + sizeof(bitmap_t)));
+    }
+    cmp = [=, this](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      FType val = *(const FType *)(record + offset);
+      return this->vals_float.contains(val);
+    };
+    break;
+  }
+  case DataType::VARCHAR: {
+    while (subquery->next()) {
+      vals_str.insert(
+          std::string((const char *)(subquery->get() + sizeof(bitmap_t))));
+    }
+    cmp = [=, this](const char *record) {
+      if (!null_check(record, index))
+        return false;
+      return this->vals_str.contains(std::string(record + offset));
+    };
+    break;
+  }
+  default:
+    assert(false);
+  }
 }
 
 SetVariable::SetVariable(std::shared_ptr<Field> field, std::any &&value_) {

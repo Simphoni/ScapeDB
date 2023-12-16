@@ -2,7 +2,9 @@
 
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <engine/defs.h>
@@ -83,6 +85,32 @@ struct ColumnLikeStringConstraint : public WhereConstraint {
 
   ColumnLikeStringConstraint(std::shared_ptr<Field> field,
                              std::string &&pattern_);
+  bool check(const uint8_t *record, const uint8_t *other) const override {
+    return cmp((char *)record);
+  }
+};
+
+struct ColumnOpSubqueryConstraint : public WhereConstraint {
+  std::shared_ptr<QueryPlanner> subquery;
+  std::function<bool(const char *)> cmp;
+
+  ColumnOpSubqueryConstraint(std::shared_ptr<Field> field, Operator op,
+                             std::shared_ptr<QueryPlanner> subquery);
+  bool check(const uint8_t *record, const uint8_t *other) const override {
+    return cmp((char *)record);
+  }
+};
+
+struct ColumnInSubqueryConstraint : public WhereConstraint {
+  std::shared_ptr<QueryPlanner> subquery;
+  std::set<int> vals_int;
+  std::set<double> vals_float;
+  std::set<std::string> vals_str;
+
+  std::function<bool(const char *)> cmp;
+
+  ColumnInSubqueryConstraint(std::shared_ptr<Field> field,
+                             std::shared_ptr<QueryPlanner> subquery);
   bool check(const uint8_t *record, const uint8_t *other) const override {
     return cmp((char *)record);
   }

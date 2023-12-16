@@ -637,6 +637,39 @@ ScapeVisitor::visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) {
       new ColumnLikeStringConstraint(field, std::move(pattern)));
 }
 
+std::any ScapeVisitor::visitWhere_operator_select(
+    SQLParser::Where_operator_selectContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  ret = ctx->select_table()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto subquery = std::any_cast<std::shared_ptr<QueryPlanner>>(std::move(ret));
+  Operator op = str2op(ctx->operator_()->getText());
+  return std::shared_ptr<WhereConstraint>(
+      new ColumnOpSubqueryConstraint(field, op, subquery));
+}
+
+std::any
+ScapeVisitor::visitWhere_in_select(SQLParser::Where_in_selectContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  ret = ctx->select_table()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto subquery = std::any_cast<std::shared_ptr<QueryPlanner>>(std::move(ret));
+  return std::shared_ptr<WhereConstraint>(
+      new ColumnInSubqueryConstraint(field, subquery));
+}
+
 // clang-format off
 /// 'ALTER' 'TABLE' Identifier 'ADD' ('CONSTRAINT' (Identifier)?)? 'PRIMARY' 'KEY' '(' identifiers ')'
 // clang-format on

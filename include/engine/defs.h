@@ -37,6 +37,8 @@ struct ColumnOpValueConstraint;
 struct ColumnOpColumnConstraint;
 struct ColumnNullConstraint;
 struct ColumnLikeStringConstraint;
+struct ColumnOpSubqueryConstraint;
+struct ColumnInSubqueryConstraint;
 
 struct SetVariable;
 class QueryPlanner;
@@ -111,11 +113,11 @@ enum ConstraintType : uint8_t {
 
 enum Operator : uint8_t {
   EQ = 1,
-  LT,
-  GT,
-  NE,
-  LE,
-  GE,
+  LT = 2,
+  LE = 3,
+  GT = 4,
+  GE = 5,
+  NE = 6,
 };
 
 Operator str2op(const std::string &s);
