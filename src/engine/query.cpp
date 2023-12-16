@@ -52,12 +52,28 @@ void QueryPlanner::generate_plan() {
     iter = std::shared_ptr<PermuteIterator>(
         new PermuteIterator(tmp_it, selector->columns));
   }
+  if (order_by_field != nullptr) {
+    iter = std::shared_ptr<SortIterator>(
+        new SortIterator(iter, order_by_field, order_by_desc));
+  }
   selector->columns = iter->get_fields_dst();
 }
 
 const uint8_t *QueryPlanner::get() const { return iter->get(); }
 
-bool QueryPlanner::next() { return iter->get_next_valid(); }
+bool QueryPlanner::next() {
+  if (req_offset > 0) {
+    for (int i = 0; i < req_offset; ++i) {
+      if (!iter->get_next_valid())
+        return false;
+    }
+    req_offset = 0;
+  }
+  if (req_limit <= 0)
+    return false;
+  --req_limit;
+  return iter->get_next_valid();
+}
 
 inline bool null_check(const char *p, int pos) {
   return ((*(const bitmap_t *)p) >> pos) & 1;

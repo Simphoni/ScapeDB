@@ -257,12 +257,51 @@ std::any ScapeVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
     planner->group_by_field =
         std::any_cast<std::shared_ptr<Field>>(std::move(ret));
   }
+  if (ctx->order_by() != nullptr) {
+    auto ret = ctx->order_by()->accept(this);
+    if (!ret.has_value()) {
+      return std::any();
+    }
+    auto tmp =
+        std::any_cast<std::pair<std::shared_ptr<Field>, bool>>(std::move(ret));
+    planner->order_by_field = tmp.first;
+    planner->order_by_desc = tmp.second;
+  }
+  if (ctx->select_limit() != nullptr) {
+    planner->req_limit = std::stoi(ctx->select_limit()->Integer()->getText());
+    if (ctx->select_offset() != nullptr) {
+      planner->req_offset =
+          std::stoi(ctx->select_offset()->Integer()->getText());
+    }
+  }
   planner->selector = std::move(selector);
   planner->tables = std::move(tables_stack.back());
   planner->constraints = std::move(constraints);
   planner->generate_plan();
   tables_stack.pop_back();
   return planner;
+}
+
+std::any ScapeVisitor::visitGroup_by(SQLParser::Group_byContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  return field;
+}
+
+std::any ScapeVisitor::visitOrder_by(SQLParser::Order_byContext *ctx) {
+  auto ret = ctx->column()->accept(this);
+  if (!ret.has_value()) {
+    return std::any();
+  }
+  auto field = std::any_cast<std::shared_ptr<Field>>(std::move(ret));
+  bool desc = false;
+  if (ctx->order() != nullptr) {
+    desc = ctx->order()->getText() == "DESC";
+  }
+  return std::make_pair(field, desc);
 }
 
 /// field (',' field)*

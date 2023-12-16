@@ -53,6 +53,10 @@ public:
 
   std::any visitSelect_table(SQLParser::Select_tableContext *ctx) override;
 
+  std::any visitGroup_by(SQLParser::Group_byContext *ctx) override;
+
+  std::any visitOrder_by(SQLParser::Order_byContext *ctx) override;
+
   std::any visitField_list(SQLParser::Field_listContext *ctx) override;
 
   std::any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;

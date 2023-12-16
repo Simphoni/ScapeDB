@@ -230,6 +230,8 @@ IndexIterator::IndexIterator(
   slotnum_init = pos.slotnum;
 }
 
+IndexIterator::~IndexIterator() { FileMapping::get()->close_temp_file(fd_dst); }
+
 void IndexIterator::reset_all() {
   pagenum_src = pagenum_init;
   slotnum_src = slotnum_init;
@@ -399,6 +401,8 @@ JoinIterator::JoinIterator(
   }
   record_per_page = Config::PAGE_SIZE / record_len;
 }
+
+JoinIterator::~JoinIterator() { FileMapping::get()->close_temp_file(fd_dst); }
 
 bool JoinIterator::get_next_valid() {
   /// rhs provides the lower dimension
@@ -601,6 +605,10 @@ AggregateIterator::AggregateIterator(
     auto ptr = PagedBuffer::get()->read_file_rdwr(std::make_pair(fd, 0));
     memset(ptr, 0, Config::PAGE_SIZE);
   }
+}
+
+AggregateIterator::~AggregateIterator() {
+  FileMapping::get()->close_temp_file(fd);
 }
 
 void AggregateIterator::update(uint8_t *p, const uint8_t *o) {
@@ -819,4 +827,131 @@ int AggregateIterator::assign_page() {
     memset(ptr, 0, Config::PAGE_SIZE);
   }
   return n_records++;
+}
+
+SortIterator::SortIterator(std::shared_ptr<Iterator> iterator,
+                           std::shared_ptr<Field> sort_by_field, bool desc)
+    : GatherIterator(IteratorType::SORT), desc(desc), iter(iterator) {
+  if (std::dynamic_pointer_cast<BlockIterator>(iterator) != nullptr) {
+    assert(false);
+  }
+  sort_by_field_type = sort_by_field->datatype->type;
+  fields_src = iterator->get_fields_dst();
+  fd = FileMapping::get()->create_temp_file();
+  fields_dst = fields_src;
+  int offset = sizeof(bitmap_t);
+  sort_by_field_index = -1;
+  for (size_t i = 0; i < fields_src.size(); ++i) {
+    if (fields_src[i] != nullptr &&
+        fields_src[i]->field_id == sort_by_field->field_id) {
+      sort_by_field_index = i;
+      sort_by_field_offset = offset;
+    }
+    offset += fields_src[i]->get_size();
+  }
+  if (sort_by_field_index == -1) {
+    has_err = true;
+    printf("ERROR: sort_by_field must appear in selectors.\n");
+    return;
+  }
+  record_len = offset;
+  record_per_page = Config::PAGE_SIZE / record_len;
+}
+
+inline bool null_check(const uint8_t *p, int pos) {
+  return ((*(const bitmap_t *)p) >> pos) & 1;
+}
+
+void SortIterator::build() {
+  if (built)
+    return;
+  built = true;
+  while (iter->get_next_valid()) {
+    const uint8_t *ptr = iter->get();
+    uint8_t *ptr_dst = PagedBuffer::get()->read_file_rdwr(
+        std::make_pair(fd, n_records / record_per_page));
+    ptr_dst += (n_records % record_per_page) * record_len;
+    memcpy(ptr_dst, ptr, record_len);
+    ++n_records;
+  }
+  uint8_t *ptr = nullptr;
+  sorted.reserve(n_records);
+  for (int i = 0; i < n_records; i++) {
+    if (i % record_per_page == 0) {
+      ptr = PagedBuffer::get()->read_file_rd(
+          std::make_pair(fd, i / record_per_page));
+    }
+    uint8_t *ptr_cur = ptr + (i % record_per_page) * record_len;
+    sorted.push_back(sort_t(i, ptr_cur));
+  }
+  fprintf(stderr, "sort %d records\n", (int)sorted.size());
+  const bool desc = this->desc;
+  const int sort_by_field_index = this->sort_by_field_index;
+  const int sort_by_field_offset = this->sort_by_field_offset;
+  const DataType sort_by_field_type = this->sort_by_field_type;
+  std::sort(sorted.begin(), sorted.end(),
+            [=](const sort_t &a, const sort_t &b) {
+              const uint8_t *ptr_a = a.second;
+              const uint8_t *ptr_b = b.second;
+              bool na = null_check(ptr_a, sort_by_field_index);
+              bool nb = null_check(ptr_b, sort_by_field_index);
+              if (na == 0 && nb == 0) {
+                return desc ? a.first > b.first : a.first < b.first;
+              }
+              if (na == 0) {
+                return !desc;
+              }
+              if (nb == 0) {
+                return desc;
+              }
+              switch (sort_by_field_type) {
+              case DataType::INT:
+              case DataType::DATE: {
+                IntType::DType val_a =
+                    *(const IntType::DType *)(ptr_a + sort_by_field_offset);
+                IntType::DType val_b =
+                    *(const IntType::DType *)(ptr_b + sort_by_field_offset);
+                if (val_a == val_b) {
+                  return desc ? a.first > b.first : a.first < b.first;
+                }
+                return desc ? val_a > val_b : val_a < val_b;
+              }
+              case DataType::FLOAT: {
+                FloatType::DType val_a =
+                    *(const FloatType::DType *)(ptr_a + sort_by_field_offset);
+                FloatType::DType val_b =
+                    *(const FloatType::DType *)(ptr_b + sort_by_field_offset);
+                if (val_a == val_b) {
+                  return desc ? a.first > b.first : a.first < b.first;
+                }
+                return desc ? val_a > val_b : val_a < val_b;
+              }
+              case DataType::VARCHAR: {
+                auto cmp = strcmp((const char *)(ptr_a + sort_by_field_offset),
+                                  (const char *)(ptr_b + sort_by_field_offset));
+                if (cmp == 0) {
+                  return desc ? a.first > b.first : a.first < b.first;
+                }
+                return desc ? cmp > 0 : cmp < 0;
+              }
+              default:
+                assert(false);
+              }
+            });
+}
+
+const uint8_t *SortIterator::get() const {
+  auto idx = sorted[iter_dst].first;
+  auto ptr = PagedBuffer::get()->read_file_rd(
+      std::make_pair(fd, idx / record_per_page));
+  return ptr + (idx % record_per_page) * record_len;
+}
+
+bool SortIterator::get_next_valid() {
+  if (!built) {
+    build();
+  } else {
+    iter_dst++;
+  }
+  return iter_dst < n_records;
 }

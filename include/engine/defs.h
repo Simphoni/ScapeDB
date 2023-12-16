@@ -95,7 +95,7 @@ enum IteratorType : uint8_t {
   INDEX,
   JOIN,
   AGGERGATE,
-  ORDERBY,
+  SORT,
   PERMUTE,
 };
 

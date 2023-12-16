@@ -61,7 +61,7 @@ table_statement
     ;
 
 select_table
-    : 'SELECT' selectors 'FROM' identifiers ('WHERE' where_and_clause)? (group_by)? (order_by)? ('LIMIT' Integer ('OFFSET' Integer)?)?
+    : 'SELECT' selectors 'FROM' identifiers ('WHERE' where_and_clause)? (group_by)? (order_by)? (select_limit (select_offset)?)?
     ;
 
 group_by
@@ -71,6 +71,10 @@ group_by
 order_by
     : 'ORDER' 'BY' column (order)?
     ;
+
+select_limit: 'LIMIT' Integer;
+
+select_offset: 'OFFSET' Integer;
 
 alter_statement
     : 'ALTER' 'TABLE' Identifier 'ADD' 'INDEX' (Identifier)? '(' identifiers ')'   			                # alter_add_index

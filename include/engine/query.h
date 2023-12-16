@@ -102,7 +102,9 @@ public:
   std::vector<std::shared_ptr<TableManager>> tables;
   std::shared_ptr<Selector> selector;
   std::vector<std::shared_ptr<WhereConstraint>> constraints;
-  std::shared_ptr<Field> group_by_field;
+  std::shared_ptr<Field> group_by_field, order_by_field;
+  int req_offset{0}, req_limit{INT_MAX};
+  bool order_by_desc;
 
   void generate_plan();
   const uint8_t *get() const;

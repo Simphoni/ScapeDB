@@ -118,6 +118,7 @@ public:
                 const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                 const std::vector<std::shared_ptr<Field>> &fields_src,
                 const std::vector<std::shared_ptr<Field>> &fields_dst);
+  ~IndexIterator();
   // todo: write this
   // ~IndexIterator();
   bool get_next_valid() override;
@@ -137,6 +138,7 @@ public:
                std::shared_ptr<BlockIterator> rhs,
                const std::vector<std::shared_ptr<WhereConstraint>> &cons,
                const std::vector<std::shared_ptr<Field>> &fields_dst);
+  ~JoinIterator();
 
   bool get_next_valid() override;
   void reset_all() override;
@@ -162,7 +164,6 @@ protected:
   bool built{false};
   int fd, record_per_page;
   int n_records{0}, iter_dst{0};
-  std::vector<field_caster> caster;
   std::vector<std::shared_ptr<Field>> fields_src;
 
   GatherIterator(IteratorType type) : Iterator(type) {}
@@ -177,6 +178,7 @@ private:
                 "count_t must equal IntType::DType");
   std::shared_ptr<BlockIterator> iter;
   std::shared_ptr<Field> group_by_field;
+  std::vector<field_caster> caster;
   int group_by_field_offset;
   int export_len;
   std::vector<Aggregator> aggrs;
@@ -191,6 +193,24 @@ public:
                     std::shared_ptr<Field> group_by_field,
                     const std::vector<std::shared_ptr<Field>> fields_dst_,
                     const std::vector<Aggregator> &aggrs);
+  ~AggregateIterator();
+  bool get_next_valid() override;
+  const uint8_t *get() const override;
+};
+
+class SortIterator : public GatherIterator {
+private:
+  using sort_t = std::pair<int, uint8_t *>;
+  DataType sort_by_field_type;
+  bool desc;
+  int sort_by_field_index, sort_by_field_offset;
+  std::shared_ptr<Iterator> iter;
+  std::vector<sort_t> sorted;
+
+public:
+  SortIterator(std::shared_ptr<Iterator> iterator,
+               std::shared_ptr<Field> sort_by_field, bool desc);
+  void build() override;
   bool get_next_valid() override;
   const uint8_t *get() const override;
 };
