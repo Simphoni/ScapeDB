@@ -197,6 +197,14 @@ void TableManager::deserialize() {
     explicit_index_keys[i]->deserialize(accessor);
     explicit_index_keys[i]->build(this);
   }
+  int ukcount = accessor.read<uint32_t>();
+  unique_keys.resize(ukcount);
+  for (int i = 0; i < ukcount; i++) {
+    unique_keys[i] = std::make_shared<UniqueKey>();
+    unique_keys[i]->deserialize(accessor);
+    unique_keys[i]->build(this);
+    unique_keys[i]->index = get_index(unique_keys[i]->local_hash());
+  }
 }
 
 /// construct from create_table SQL query
@@ -272,6 +280,10 @@ TableManager::~TableManager() {
   accessor.write<uint32_t>(explicit_index_keys.size());
   for (const auto &ik : explicit_index_keys) {
     ik->serialize(accessor);
+  }
+  accessor.write<uint32_t>(unique_keys.size());
+  for (const auto &uk : unique_keys) {
+    uk->serialize(accessor);
   }
 }
 
@@ -644,7 +656,7 @@ std::shared_ptr<BlockIterator> TableManager::make_iterator(
       continue;
     }
     auto index = first_key_offsets[cov->column_offset];
-    int lbound = INT_MIN, rbound = INT_MAX;
+    int lbound = INT_MIN + 1, rbound = INT_MAX;
     switch (cov->op) {
     case Operator::EQ:
       lbound = cov->value;

@@ -280,6 +280,13 @@ bool IndexIterator::get_next_valid() {
   return true;
 }
 
+int *IndexIterator::get_keys() const {
+  auto slice =
+      PagedBuffer::get()->read_file_rd(std::make_pair(fd_src, pagenum_src));
+  int *keys = (int *)(slice + sizeof(BPlusNodeMeta));
+  return keys + slotnum_src * key_num;
+}
+
 int IndexIterator::fill_next_block() {
   n_records = 0;
   dst_iter = 0;

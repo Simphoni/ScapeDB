@@ -119,11 +119,11 @@ public:
                 const std::vector<std::shared_ptr<Field>> &fields_src,
                 const std::vector<std::shared_ptr<Field>> &fields_dst);
   ~IndexIterator();
-  // todo: write this
-  // ~IndexIterator();
   bool get_next_valid() override;
   void reset_all() override;
   int fill_next_block() override;
+  int get_key_num() const { return key_num; }
+  int *get_keys() const;
 };
 
 class JoinIterator : public BlockIterator {

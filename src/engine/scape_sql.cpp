@@ -190,14 +190,27 @@ void update_set_table(
   int record_len = table->get_record_len();
   buf_i.resize(record_len);
   buf_o.resize(record_len);
-  // TODO: add index iterator to speed up search
+
+  auto iter = table->make_iterator(where_constraints, table->get_fields());
   auto record_manager = table->get_record_manager();
-  auto record_iter = std::shared_ptr<RecordIterator>(new RecordIterator(
-      record_manager, where_constraints, table->get_fields(), {}));
-  int modified_rows = 0;
-  while (record_iter->get_next_valid()) {
-    ++modified_rows;
-    auto [pn, sn] = record_iter->get_locator();
+  std::vector<std::pair<int, int>> rec;
+
+  if (std::dynamic_pointer_cast<RecordIterator>(iter) != nullptr) {
+    auto record_iter = std::dynamic_pointer_cast<RecordIterator>(iter);
+    while (record_iter->get_next_valid()) {
+      auto [pn, sn] = record_iter->get_locator();
+      rec.emplace_back(pn, sn);
+    }
+  } else {
+    auto index_iter = std::dynamic_pointer_cast<IndexIterator>(iter);
+    int key_num = index_iter->get_key_num() - 2;
+    while (index_iter->get_next_valid()) {
+      int *keys = index_iter->get_keys();
+      int pn = keys[key_num], sn = keys[key_num + 1];
+      rec.emplace_back(pn, sn);
+    }
+  }
+  for (auto [pn, sn] : rec) {
     auto record_ref = record_manager->get_record_ref(pn, sn);
     memcpy(buf_i.data(), record_ref, record_len);
     memcpy(buf_o.data(), record_ref, record_len);
@@ -242,7 +255,7 @@ void update_set_table(
     table->insert_record(buf_o.data(), false);
   }
   if (!has_err) {
-    Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
+    Logger::tabulate({"rows", std::to_string(rec.size())}, 2, 1);
   }
 }
 
@@ -252,16 +265,28 @@ void delete_from_table(
   if (has_err) {
     return;
   }
-  // TODO: add index iterator to speed up search
-  auto record_manager = table->get_record_manager();
-  auto record_iter = std::make_shared<RecordIterator>(
-      record_manager, where_constraints, table->get_fields(),
-      std::vector<std::shared_ptr<Field>>({}));
   int modified_rows = 0;
-  while (record_iter->get_next_valid() && !has_err) {
-    auto [pn, sn] = record_iter->get_locator();
-    table->erase_record(pn, sn, true);
-    ++modified_rows;
+  auto iter = table->make_iterator(where_constraints, table->get_fields());
+  if (std::dynamic_pointer_cast<RecordIterator>(iter) != nullptr) {
+    auto record_iter = std::dynamic_pointer_cast<RecordIterator>(iter);
+    while (record_iter->get_next_valid() && !has_err) {
+      auto [pn, sn] = record_iter->get_locator();
+      table->erase_record(pn, sn, true);
+      ++modified_rows;
+    }
+  } else {
+    auto index_iter = std::dynamic_pointer_cast<IndexIterator>(iter);
+    int key_num = index_iter->get_key_num() - 2;
+    std::vector<std::pair<int, int>> rec;
+    while (index_iter->get_next_valid() && !has_err) {
+      int *keys = index_iter->get_keys();
+      int pn = keys[key_num], sn = keys[key_num + 1];
+      rec.emplace_back(pn, sn);
+    }
+    for (auto [pn, sn] : rec) {
+      table->erase_record(pn, sn, true);
+    }
+    modified_rows = rec.size();
   }
   if (!has_err) {
     Logger::tabulate({"rows", std::to_string(modified_rows)}, 2, 1);
