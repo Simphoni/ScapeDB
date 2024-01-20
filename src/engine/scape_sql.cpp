@@ -143,9 +143,7 @@ void describe_table(const std::string &table_name) {
   for (auto fk : foreign_keys) {
     assert(fk != nullptr);
     printf("FOREIGN KEY ");
-    // if (!fk->random_name) {
-    //   printf("%s", fk->key_name.data());
-    // }
+    printf("%s", fk->key_name.data());
     print_list(fk->field_names);
     printf(" REFERENCES %s", fk->ref_table_name.data());
     print_list(fk->ref_field_names);
@@ -155,9 +153,7 @@ void describe_table(const std::string &table_name) {
   for (auto uk : unique_keys) {
     assert(uk != nullptr);
     printf("UNIQUE ");
-    // if (!uk->random_name) {
-    //   printf("%s", uk->key_name.data());
-    // }
+    printf("%s", uk->key_name.data());
     print_list(uk->field_names);
     puts(";");
   }
@@ -165,9 +161,7 @@ void describe_table(const std::string &table_name) {
   for (auto ek : explicit_index_keys) {
     assert(ek != nullptr);
     printf("INDEX ");
-    // if (!ek->random_name) {
-    //   printf("%s", ek->key_name.data());
-    // }
+    printf("%s", ek->key_name.data());
     print_list(ek->field_names);
     puts(";");
   }

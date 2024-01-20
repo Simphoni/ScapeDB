@@ -24,7 +24,8 @@ std::shared_ptr<DataTypeBase> DataTypeBase::build(const std::string &s) {
   } else if (s == "DATE") {
     return std::make_shared<DateType>();
   } else {
-    assert(false);
+    has_err = true;
+    throw std::runtime_error("invalid data type");
   }
 }
 
@@ -39,7 +40,7 @@ std::shared_ptr<DataTypeBase> DataTypeBase::build(DataType type) {
   case DataType::DATE:
     return std::make_shared<DateType>();
   default:
-    assert(false);
+    throw std::runtime_error("invalid data type");
   }
 }
 
@@ -265,7 +266,7 @@ std::shared_ptr<KeyBase> KeyBase::build(KeyType type) {
   case KeyType::FOREIGN:
     return std::make_shared<ForeignKey>();
   default:
-    assert(false);
+    throw std::runtime_error("invalid key type");
   }
 }
 

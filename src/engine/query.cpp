@@ -211,7 +211,7 @@ void ColumnOpColumnConstraint::build(int col_idx, int col_off, int col_idx_o,
     break;
   }
   default:
-    assert(false);
+    throw std::runtime_error("unknown data type");
   }
 }
 
@@ -324,7 +324,7 @@ ColumnOpSubqueryConstraint::ColumnOpSubqueryConstraint(
     break;
   }
   default:
-    assert(false);
+    throw std::runtime_error("unknown data type");
   }
 }
 
@@ -378,7 +378,7 @@ ColumnInSubqueryConstraint::ColumnInSubqueryConstraint(
     break;
   }
   default:
-    assert(false);
+    throw std::runtime_error("unknown data type");
   }
 }
 

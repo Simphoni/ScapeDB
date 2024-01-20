@@ -17,7 +17,7 @@ DataType str2keytype(const std::string &s) {
   } else if (std::string_view(s.data(), 7) == "VARCHAR") {
     return VARCHAR;
   } else {
-    assert(false);
+    throw std::runtime_error("unknown key type");
   }
 }
 
@@ -30,7 +30,7 @@ std::string datatype2str(DataType type) {
   case VARCHAR:
     return "VARCHAR";
   default:
-    assert(false);
+    throw std::runtime_error("unknown data type");
   }
 }
 
@@ -41,7 +41,7 @@ std::string keytype2str(KeyType type) {
   case FOREIGN:
     return "FOREIGN";
   default:
-    assert(false);
+    throw std::runtime_error("unknown key type");
   }
 }
 
@@ -57,7 +57,7 @@ Aggregator str2aggr(const std::string &str) {
   } else if (str == "SUM") {
     return SUM;
   } else {
-    assert(false);
+    throw std::runtime_error("unknown aggregator");
   }
 }
 
@@ -75,6 +75,6 @@ Operator str2op(const std::string &s) {
   } else if (s == ">=") {
     return GE;
   } else {
-    assert(false);
+    throw std::runtime_error("unknown operator");
   }
 }

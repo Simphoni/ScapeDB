@@ -127,7 +127,7 @@ void tabulate_interactive(std::shared_ptr<QueryPlanner> planner) {
           break;
         }
         default:
-          assert(false);
+          throw std::runtime_error("unknown data type");
         }
       } else {
         print("NULL", maxlen[i]);
@@ -174,7 +174,7 @@ void tabulate_batch(std::shared_ptr<QueryPlanner> planner) {
           break;
         }
         default:
-          assert(false);
+          throw std::runtime_error("unknown data type");
         }
       } else {
         printf("NULL");

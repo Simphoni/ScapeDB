@@ -27,7 +27,11 @@ void ScapeFrontend::parse(const std::string &stmt) {
   parser.setBuildParseTree(true);
   auto tree = parser.program();
   auto planner = new ScapeVisitor;
-  planner->visitProgram(tree);
+  try {
+    planner->visitProgram(tree);
+  } catch (const std::exception &e) {
+    std::cerr << "ERROR: " << e.what() << std::endl;
+  }
   delete planner;
 }
 

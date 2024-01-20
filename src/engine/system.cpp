@@ -319,6 +319,11 @@ void TableManager::purge() {
 }
 
 void TableManager::insert_record(const std::vector<std::any> &values) {
+  if (values.size() != fields.size()) {
+    printf("ERROR: insert values size mismatch.\n");
+    has_err = true;
+    return;
+  }
   static std::vector<uint8_t> temp_buf;
   temp_buf.resize(record_len);
   memset(temp_buf.data(), 0, temp_buf.size());
